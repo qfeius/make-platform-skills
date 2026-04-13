@@ -1,6 +1,9 @@
 ---
 name: makecli
 description: Guidance for using makecli in this repo (flags, output formats, pagination, auth, and discovery). Use when asked to run or design makecli commands or interact with make platform via the makecli.
+version: 0.0.1
+metadata:
+  homepage: https://github.com/qfeius/make-platform-skills/makecli
 ---
 
 # Makecli usage
