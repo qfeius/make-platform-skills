@@ -10,15 +10,26 @@ make 平台的 skill
   npx skills update  qfeius/make-platform-skills
 ```
 
-## 可用 Skill
+## 可用 Skill 列表
+
 ### makecli
 指导如何使用 `makecli` 命令行
+
+#### 升级 skill
+```bash
+npx skills update makecli
+```
 
 **使用场景**
 - 你需要指导使用 `makecli` 命令
 
 ### makedsl
 指导如何生成 dsl 文件
+
+#### 升级 skill
+```bash
+npx skills update makedsl
+```
 
 **使用场景**
 - 根据业务的需求生成服务要求的 dsl 文件
