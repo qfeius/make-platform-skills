@@ -5,6 +5,10 @@ make 平台的 skill
 ```
   npx skills add qfeius/make-platform-skills
 ```
+# 升级
+```
+  npx skills update  qfeius/make-platform-skills
+```
 
 ## 可用 Skill
 ### makecli
