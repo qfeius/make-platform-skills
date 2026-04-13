@@ -9,7 +9,8 @@ metadata:
 # makedsl usage
 Use this skill when you need to  design or generate dsl for make platform or make 开发平台.
 make platform 从 kubernetes 和 ansible 中借鉴了设计思路, 业务的模型通过 DSL 建模定义, 
-然后通过 DataAPI 来对数据进行 CRUD-LS
+然后通过 DataAPI 来对数据进行 CRUD-LS. 
+生成的 DSL(yaml) 文件应该通过 `makecli` 提交到 make platform (make 开发者平台)
 
 # DSL定义
 
