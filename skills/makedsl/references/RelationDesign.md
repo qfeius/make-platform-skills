@@ -182,7 +182,7 @@ properties:
         version: 1.0.0
       properties: null
     - name: 任务状态
-      type: Make.Field.Select
+      type: Make.Field.SingleSelect
       meta:
         version: 1.0.0
       properties:
