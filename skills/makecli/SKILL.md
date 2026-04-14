@@ -1,7 +1,7 @@
 ---
 name: makecli
 description: "Use when the user asks to manage Make platform resources — create/deploy apps, entities, relations, records, or use makecli CLI commands. Also triggered by requests like \"部署\", \"apply\", \"查看应用\", \"创建记录\", or \"/makecli\"."
-version: 0.1.0
+version: 0.2.0
 metadata:
   homepage: https://github.com/qfeius/make-platform-skills
 ---
@@ -72,7 +72,7 @@ Read `@references/cli-reference.md` for exact flag syntax.
 Common imperative operations:
 ```bash
 # App
-makecli app create <name> [--code <code>]
+makecli app create [name] [--description <desc>] [--render-name <display>] [-f app.yaml]
 makecli app delete <name>
 makecli app list [--output json]
 

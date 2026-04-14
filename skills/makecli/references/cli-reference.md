@@ -65,11 +65,13 @@ Verify that the current profile has a valid token. Use this to check environment
 ### app create
 
 ```
-makecli app create <name> [--code <value>] [--profile <name>]
+makecli app create [name] [--description <value>] [--render-name <value>] [-f <path>] [--profile <name>]
 ```
 
-- `name`: required, positional
-- `--code`: app code identifier (defaults to name)
+- `name`: positional (optional if using `-f`)
+- `--description`: app description
+- `--render-name`: app display name (defaults to name)
+- `-f, --file`: path to YAML file containing Make.App resource
 
 ### app list
 
