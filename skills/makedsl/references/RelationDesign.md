@@ -1,18 +1,3 @@
-<!-- TOC -->
-
-- [设计原则](#%E8%AE%BE%E8%AE%A1%E5%8E%9F%E5%88%99)
-- [Relation DSL](#relation-dsl)
-- [例子](#%E4%BE%8B%E5%AD%90)
-  - [一对一：用户 ↔ 档案](#%E4%B8%80%E5%AF%B9%E4%B8%80%E7%94%A8%E6%88%B7--%E6%A1%A3%E6%A1%88)
-  - [一对多：项目 ↔ 任务](#%E4%B8%80%E5%AF%B9%E5%A4%9A%E9%A1%B9%E7%9B%AE--%E4%BB%BB%E5%8A%A1)
-  - [多对多：学生 ↔ 课程](#%E5%A4%9A%E5%AF%B9%E5%A4%9A%E5%AD%A6%E7%94%9F--%E8%AF%BE%E7%A8%8B)
-- [数据库实现参考](#%E6%95%B0%E6%8D%AE%E5%BA%93%E5%AE%9E%E7%8E%B0%E5%8F%82%E8%80%83)
-  - [一对一 / 一对多](#%E4%B8%80%E5%AF%B9%E4%B8%80--%E4%B8%80%E5%AF%B9%E5%A4%9A)
-  - [多对多](#%E5%A4%9A%E5%AF%B9%E5%A4%9A)
-  - [LookupField 查询](#lookupfield-%E6%9F%A5%E8%AF%A2)
-
-<!-- /TOC -->
-
 # 设计原则
 
 Relation 与 LookupField 职责正交：
@@ -278,6 +263,57 @@ properties:
 ```
 
 > N:M 两侧 cardinality 都是 `many`，两侧的 LookupField 都需要 `transform`。
+
+# Relation 写入
+
+Relation 决定结构，LookupField 决定展示；真正写入关联关系时，需要在 `CreateResource` / `UpdateResource` 的 `data.qfei_relation` 中显式传递对端记录。
+
+- `qfei_relation` 是数组，即使当前只关联一条记录也使用数组包裹
+- 数组项格式固定为 `{ "entity": "<对端 Entity 名称>", "id": "<对端 recordID>" }`
+- `LookupField` 不参与写入，它只负责把关联对象的字段投影出来展示
+- 具体接口字段见 @DataAPIDesign.md
+
+**一对多：创建任务并关联到项目**
+
+```json
+{
+  "app": "ProjectApp",
+  "entity": "任务",
+  "data": {
+    "任务名称": "编写方案",
+    "任务状态": "todo",
+    "qfei_relation": [
+      {
+        "entity": "项目",
+        "id": "123"
+      }
+    ]
+  }
+}
+```
+
+**多对多：更新学生并关联多门课程**
+
+```json
+{
+  "app": "CourseApp",
+  "entity": "学生",
+  "recordID": "123",
+  "data": {
+    "姓名": "张三",
+    "qfei_relation": [
+      {
+        "entity": "课程",
+        "id": "123"
+      },
+      {
+        "entity": "课程",
+        "id": "345"
+      }
+    ]
+  }
+}
+```
 
 # 数据库实现参考
 

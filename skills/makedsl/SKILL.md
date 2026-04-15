@@ -1,7 +1,6 @@
 ---
 name: makedsl
 description: Use when designing or generating Make platform DSL YAML — defining apps, entities, fields, relations, views, or record schemas. Also triggered by requests like "建模", "建表", "加字段", "定义关联", or "生成 DSL".
-version: 0.1.0
 metadata:
   homepage: https://github.com/qfeius/make-platform-skills/makedsl
 ---
@@ -115,8 +114,9 @@ properties:
 
 ## Relation | 关联
 
-Relation 是描述 Entity 之间关系的纯结构声明——谁和谁有关系、几对几。不涉及任何展示逻辑。
-关联数据的展示通过 LookupField 实现（详见 @references/RelationDesign.md）。
+- Relation 是描述 Entity 之间关系的纯结构声明——谁和谁有关系、几对几。不涉及任何展示逻辑。（详见 @references/RelationDesign.md）
+- 关联数据的展示通过 LookupField 实现（详见 @references/FieldDesign.md）。
+- 关联数据写入时，需要在 Data API 的 `data.qfei_relation` 中显式传递关联对象。（详见： @references/DataAPIDesign.md）
 
 ## Field | 字段
 

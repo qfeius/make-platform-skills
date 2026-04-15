@@ -1,12 +1,14 @@
 # FileField
 我们目前 FileField 在业务上是用于业务可以上传图片/PDF 等各种文件
 
+FileField 的值始终是数组，通过 `maxCount` 控制最多允许上传多少个文件。字段 DSL 说明见 @FieldDesign.md
+
 ## File 字段的流程
 1. 先创建 Entity -> FileField
 2. 创建一个 Record, 然后会得到 Record id
 3. 根据 Record id 上传文件
 4. 上传成功会返回文件的地址, 也会同时自动更新 FileField 中的地址
-5. 客户端可以根据 FileField 中的 fileURL 通过 GET 直接下载 
+5. 客户端可以根据 FileField 中的 fileURL 通过 GET 直接下载
 
 ## 例子
 ### 业务场景
@@ -71,7 +73,7 @@ Response Body
   "code": 200,
   "msg": "Create record success",
   "data": {
-    "recordID": "rec_abc123"
+    "recordID": "123"
   }
 }
 ```
@@ -97,7 +99,7 @@ Content-Type: application/json
   "app": "<NAME>",
   "entity": "报销单",
   "field": "invoice",
-  "recordID": "rec_abc123"
+  "recordID": "123"
 }
 --boundary
 Content-Disposition: form-data; name="file"; filename="invoice1.pdf"
@@ -117,19 +119,19 @@ Response Body
   "code": 200,
   "msg": "upload file success",
   "data": {
-    "recordID": "rec_abc123",
+    "recordID": "123",
     "invoice": [
       {
         "fileName": "realName1.pdf",
         "filePath": "${org}/${app}/${sha256}.pdf",
         "fileSizeInBytes": 2048000,
-        "fileURL": "https://dev-make.qtech.cn/api/make/data/v1/download/${filePath}" // 这里的 filePath 是引用上面 fileName 下一行的 filePath 变量
+        "fileURL": "https://dev-make.qtech.cn/api/make/data/v1/download/${filePath}"
       },
       {
         "fileName": "realName2.png",
         "filePath": "${org}/${app}/${sha256}.png",
         "fileSizeInBytes": 1024000,
-        "fileURL": "https://dev-make.qtech.cn/api/make/data/v1/download/${filePath}" // 这里的 filePath 是引用上面 fileName 下一行的 filePath 变量
+        "fileURL": "https://dev-make.qtech.cn/api/make/data/v1/download/${filePath}"
       }
     ]
   }
@@ -156,7 +158,7 @@ Request Body
 {
   "app": "<NAME>",
   "entity": "报销单",
-  "recordID": "rec_abc123"
+  "recordID": "123"
 }
 ```
 
@@ -167,7 +169,7 @@ Response Body
   "code": 200,
   "msg": "Get record success",
   "data": {
-    "recordID": "rec_abc123",
+    "recordID": "123",
     "amount": 1280.50,
     "invoice": [
       {
@@ -186,6 +188,8 @@ Response Body
   }
 }
 ```
+
+当 `maxCount=1` 时，返回结构仍然是单元素数组，而不是对象。
 
 #### Step 5: 下载文件
 GET `fileURL`，服务端校验权限后从云存储流式返回文件内容。
