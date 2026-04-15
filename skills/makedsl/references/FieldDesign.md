@@ -64,7 +64,7 @@ validations:
   isJSON: Boolean
   minLength: Integer
   maxLength: Integer
-  matchRegexp:/foo/
+  matchRegexp: /foo/
 ```
 
 ### TextField 例子
@@ -116,6 +116,9 @@ validations:
 ## NumberField | 数字字段
 
 表示数字, 支持整数, 小数等。
+
+### 约束
+- 如果是金额类型，禁止使用数字字段代替
 
 ### NumberField DSL
 
@@ -227,7 +230,7 @@ validations:
 
 ## DateField | 日期字段
 
-表示时间
+表示日期
 
 ### DateField DSL
 
@@ -261,7 +264,7 @@ validations:
 
 ## DateTimeField | 日期时间字段
 
-表示日期
+表示时间
 
 ```yaml
 name: <NAME>
@@ -313,7 +316,7 @@ validations:
 name: <NAME>
 type: Make.Field.DateRange
 meta:
-  version: 1.0.0
+  version: SemanticVersion
 properties:
   begin: "2025-06-01"
   end: "2025-12-01"
@@ -416,7 +419,7 @@ validations:
 ## FileField | 文件字段
 
 用来存储和管理文件。FileField 统一采用数组语义，通过 `maxCount` 控制文件数量上限。
-详情请见 @FileFieldDesign.md
+上传、自动回填与下载流程详见 @FileFieldDesign.md
 
 ### FileField DSL
 
@@ -454,7 +457,13 @@ Derived Field 表示该字段是从其它的字段的值派生而来的
 
 ## LookupField | 查找字段
 
-LookupField 的 lookup source 看起来是 linked source (table-> field)。
+LookupField 通过 Relation 找到对端记录，再读取对端字段作为展示值。
+
+### 约束
+
+- 如果在 A 对象中需要展示 B 对象的字段数据，则必须使用` LookupField` 实现，禁止通过自定义关联Id字段来实现。
+- LookupField 只负责展示，不负责写入关系。
+- 关联关系写入时使用 `CreateResource` / `UpdateResource` 的 `data.qfei_relation`。接口示例见 @DataAPIDesign.md
 
 ### LookupField DSL
 

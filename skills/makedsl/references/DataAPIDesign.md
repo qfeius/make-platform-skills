@@ -10,11 +10,14 @@ Entity 可以理解是一张 Table, Record 可以理解是一个 Row, 也就是 
 
 ## 约束
 
-如果是开放的 API 开放平台域名需要符合这里面的规范
+- 如果是开放的 API 开放平台域名需要符合这里面的规范
 
 ```
 https://dev-make.qtech.cn/api/make
 ```
+- 如果两个对象存在 Relation 关系，则在添加或更新数据时需要用 `data.qfei_relation` 传递参数。Relation 建模方式见 @RelationDesign.md
+- `qfei_relation` 的数组项格式固定为 `{ "entity": "<关联对象名称>", "id": "<关联 recordID>" }`
+- 如果在 A 对象中需要展示 B 对象的字段数据，则必须使用 `LookupField` 实现，禁止通过自定义关联Id字段来实现，`LookupField` 规则详见 @FieldDesign.md
 
 ## JSON-RPC 接口
 
@@ -27,13 +30,16 @@ AI 使用 DataAPI
 - **HTTP 方法永远是 POST, 下载文件(FileField)是一个例外**
 - **Action 不在路径里，在 `X-Make-Target` header 里面**
 
-可选 value：
-- `MakeService.CreateResource`
-- `MakeService.GetResource`
-- `MakeService.UpdateResource`
-- `MakeService.DeleteResource`
-- `MakeService.StatusResource`
-- `MakeService.ListResources`
+Action 不在路径里，在 `X-Make-Target` header 里面，可选 value 是:
+
+```
+MakeService.CreateResource
+MakeService.GetResource
+MakeService.UpdateResource
+MakeService.DeleteResource
+MakeService.StatusResource
+MakeService.ListResources
+```
 
 Request Body 是 JSON  
 **!!!注意有个例外的情况: 上传文件(`api/make/data/v1/file`)是`Content-Type: multipart/form-data`**  
@@ -61,6 +67,27 @@ Response Body 格式如下：
 }
 ```
 
+分页查询 Response Body 格式
+
+```json
+{
+  "code": 200,
+  "msg": "xxx",
+  "data": [{}],
+  "pagination": {
+    "page": 1,
+    "size": 10,
+    "total": 100
+  }
+}
+```
+
+说明：
+
+- 成功时 `code` 固定为 `200`
+- `msg` 是示例性文案，不建议把具体文案当成强约束
+- 分页查询会额外返回 `pagination`
+
 ## 接口
 
 ### 创建 Record 数据
@@ -77,15 +104,27 @@ Request Body
 
 ```json
 {
-  "app": <NAME>,
-  "entity": <NAME>,
-  "data" : {
-      "name": "张三",    
-      "hobby": ["xxx", "yyy"],    
-      "field_name_3": "2026-02-24"
+  "app": "<NAME>",
+  "entity": "<NAME>",
+  "data": {
+    "name": "张三",
+    "hobby": ["xxx", "yyy"],
+    "date_field": "2026-02-24",
+    "datetime_field": "2026-02-24 17:00:00",
+    "qfei_relation": [
+      {
+        "entity": "档案",
+        "id": "123"
+      }
+    ]
   }
 }
 ```
+
+其中：
+
+- `entity` 表示对端的 Entity 名称
+- `id` 表示对端记录的 `recordID`
 
 Response Body
 
@@ -93,11 +132,15 @@ Response Body
 {
   "code": 200,
   "msg": "Create record success",
-  "data" : {
-    "recordID": "xxxx"
-  } 
+  "data": {
+    "recordID": "1"
+  }
 }
 ```
+
+说明：
+
+- `recordID` 固定是 string 类型
 
 ### 批量删除 Record
 
@@ -128,8 +171,8 @@ Response Body
   "code": 200,
   "msg": "delete record success",
   "data" : [
-     {"recordID": "record_id_1", "code": 200, "msg": "delete success"},
-     {"recordID": "record_id_2", "code": 400, "msg": "Permission denied"}
+     {"recordID": "1", "code": 200, "msg": "delete success"},
+     {"recordID": "2", "code": 400, "msg": "Permission denied"}
   ]
 }
 ```
@@ -148,13 +191,20 @@ Request Body
 
 ```json
 {
-  "app": <NAME>,
-  "entity": <NAME>,
-  "recordID": "xxxx",
-  "data" : {
-      "field_name_1": "张三",    
-      "field_name_2": 100,    
-      "field_name_3": "2026-02-24"
+  "app": "<NAME>",
+  "entity": "<NAME>",
+  "recordID": "1",
+  "data": {
+    "field_name_1": "张三",
+    "field_name_2": 100,
+    "date_field": "2026-02-24",
+    "datetime_field": "2026-02-24 17:00:00",
+    "qfei_relation": [
+      {
+        "entity": "档案",
+        "id": "123"
+      }
+    ]
   }
 }
 ```
@@ -166,7 +216,7 @@ Response Body
   "code": 200,
   "msg": "Update record success",
   "data" : {
-    "recordID": "xxxx"
+    "recordID": "1"
   } 
 }
 ```
@@ -185,11 +235,20 @@ Request Body
 
 ```json
 {
-  "app": <NAME>,
-  "entity": <NAME>,
-  "recordIDList" : ["record_id_1", "record_id_2", "record_id_3"],
+  "app": "<NAME>",
+  "entity": "<NAME>",
+  "recordIDList": ["1", "2", "3"],
   "data": {
-      "field": "value",   // 负责人 = 张三
+    "field_name_1": "张三",
+    "field_name_2": 100,
+    "date_field": "2026-02-24",
+    "datetime_field": "2026-02-24 17:00:00",
+    "qfei_relation": [
+      {
+        "entity": "档案",
+        "id": "123"
+      }
+    ]
   }
 }
 ```
@@ -201,12 +260,18 @@ Response Body
   "code": 200,
   "msg": "Update record success",
   "data" : {
-    "recordID": "xxxx"
+    "recordID": "1"
   } 
 }
 ```
 
 ### 获取单条 Record 数据
+
+查询结果理解规则
+
+- `recordID` 固定是 string 类型
+- `data` 是单个 Record 对象，业务字段的 key 就是字段 key，不是固定 DTO
+- `fields` 为空时默认返回全部字段；传了 `fields` 时只保证返回所选字段
 
 ```
 POST https://dev-make.qtech.cn/api/make/data/v1/record
@@ -220,11 +285,32 @@ Request Body
 
 ```json
 {
-  "app": <NAME>,
-  "entity": <NAME>,
-  "recordID": "xxxx"
+  "app": "<NAME>",
+  "entity": "<NAME>",
+  "fields": [
+    "orderNo",
+    "projectName",
+    "projectDescription",
+    "projectContent",
+    "website",
+    "score",
+    "budget",
+    "completionRate",
+    "startDate",
+    "createdAt",
+    "deliveryPeriod",
+    "status",
+    "tags",
+    "locationPath",
+    "attachments"
+  ],
+  "recordID": "1"
 }
 ```
+
+说明：
+
+- `fields` 可选；为空时表示返回该对象的全部字段
 
 Response Body
 
@@ -232,28 +318,77 @@ Response Body
 {
   "code": 200,
   "msg": "Get record success",
-  "data" : {
-    "recordID": "xxxx",
-    "employee": {
-      "recordID": "employee_record_id_1",
-      "name" : "张三",
-      "age" : 18
-    },    
-    "field_name_2": 100,    
-    "field_name_3": "2026-02-24"
-  } 
+  "data": {
+    "recordID": "1",
+    "orderNo": "SO-2026-0001",
+    "projectName": "智能客服升级",
+    "projectDescription": "升级 FAQ 与工单联动能力",
+    "projectContent": "<p>需要支持富文本说明</p>",
+    "website": "https://example.com/projects/1",
+    "score": 95.5,
+    "budget": "¥1,999.00",
+    "completionRate": "85.00%",
+    "startDate": "2026-02-24",
+    "createdAt": "2026-02-24 17:00:00",
+    "deliveryPeriod": {
+      "begin": "2026-02-24",
+      "end": "2026-03-31"
+    },
+    "status": [
+      {
+        "label": "进行中",
+        "value": "in_progress"
+      }
+    ],
+    "tags": [
+      {
+        "label": "紧急",
+        "value": "urgent"
+      },
+      {
+        "label": "对外",
+        "value": "external"
+      }
+    ],
+    "locationPath": [
+      {
+        "label": "中国",
+        "value": "china"
+      },
+      {
+        "label": "上海",
+        "value": "shanghai"
+      }
+    ],
+    "attachments": [
+      {
+        "fileName": "proposal.pdf",
+        "filePath": "8/demo-app/project/proposal.pdf",
+        "fileURL": "https://cdn.example.com/proposal.pdf",
+        "fileSizeInBytes": 102400
+      }
+    ]
+  }
 }
 ```
 
-为避免循环依赖，限制只展开一层
+说明：
+
+- `msg` 是示例性文案，不建议依赖具体文本
+- 上面的示例展示的是“稳定可依赖”的查询结果结构；如果字段类型不同，返回形状也会不同，详见：`常见字段类型返回结构示例`
 
 ### 分页查询 Record 数据
+
+分页结果理解规则
+
+- `data` 是 Record 对象数组，每个元素的字段结构与 `GetResource.data` 一致
+- 分页查询比单条查询多一个 `pagination`，其中 `page`、`size`、`total` 分别表示当前页、页大小、总条数
+- `fields`、字段类型解释、选项类字段结构与单条查询完全一致
 
 ```
 POST https://dev-make.qtech.cn/api/make/data/v1/record
 HEADER
-  Authorization: Bearer <JWT Token>
-  Content-Type: application/json
+  Authorization: Bearer <MAKE_API_TOKEN>
   X-Make-Target: MakeService.ListResources
 ```
 
@@ -261,33 +396,99 @@ Request Body
 
 ```json
 {
-  "app": <NAME>,
-  "entity": <NAME>,
-  "fields": ["id", "name", "email", "createdAt"], // 为空就默认全部
+  "app": "<NAME>",
+  "entity": "<NAME>",
+  "fields": [
+    "orderNo",
+    "projectName",
+    "projectDescription",
+    "projectContent",
+    "website",
+    "score",
+    "budget",
+    "completionRate",
+    "startDate",
+    "createdAt",
+    "deliveryPeriod",
+    "status",
+    "tags",
+    "locationPath",
+    "attachments"
+  ],
   "filter": {},
   "sort": [
     { "field": "createdAt", "order": "desc" },
-    { "field": "id", "order": "asc" }
+    { "field": "orderNo", "order": "asc" }
   ],
   "pagination": { "page": 1, "size": 10 }
 }
 ```
+
+说明：
+
+- `sort.field` 使用字段 key，不是字段名称
+- `pagination.page` 从 `1` 开始
+- 如果不传 `fields`，返回结果默认包含全部字段
 
 Response Body
 
 ```json
 {
   "code": 200,
-  "msg": "query record success",
+  "msg": "List records success",
   "data": [
-     {
-    "recordID": "xxxx",
-    "field_name_1": "张三",    
-    "field_name_2": 100,    
-    "field_name_3": "2026-02-24"
-  },
-  {...}
-   ],
+    {
+      "recordID": "1",
+      "orderNo": "SO-2026-0001",
+      "projectName": "智能客服升级",
+      "projectDescription": "升级 FAQ 与工单联动能力",
+      "projectContent": "<p>需要支持富文本说明</p>",
+      "website": "https://example.com/projects/1",
+      "score": 95.5,
+      "budget": "¥1,999.00",
+      "completionRate": "85.00%",
+      "startDate": "2026-02-24",
+      "createdAt": "2026-02-24 17:00:00",
+      "deliveryPeriod": {
+        "begin": "2026-02-24",
+        "end": "2026-03-31"
+      },
+      "status": [
+        {
+          "label": "进行中",
+          "value": "in_progress"
+        }
+      ],
+      "tags": [
+        {
+          "label": "紧急",
+          "value": "urgent"
+        },
+        {
+          "label": "对外",
+          "value": "external"
+        }
+      ],
+      "locationPath": [
+        {
+          "label": "中国",
+          "value": "china"
+        },
+        {
+          "label": "上海",
+          "value": "shanghai"
+        }
+      ],
+      "attachments": [
+        {
+          "fileName": "proposal.pdf",
+          "filePath": "8/demo-app/project/proposal.pdf",
+          "fileURL": "https://cdn.example.com/proposal.pdf",
+          "fileSizeInBytes": 102400
+        }
+      ]
+    }
+  ],
   "pagination": {
     "page": 1,
     "size": 10,
@@ -295,6 +496,12 @@ Response Body
   }
 }
 ```
+
+说明：
+
+- 分页查询中的每条元素结构与单条查询的 `data` 完全一致，只是顶层从对象变成数组，数组中的单条数据根据字段类型不同，返回形状也会不同，详见：`常见字段类型返回结构示例`
+- `pagination.total` 表示满足当前筛选条件的总记录数，而不是当前页记录数
+
 
 ### 上传文件
 
@@ -316,7 +523,7 @@ Content-Type: application/json
 {
   "app": "烽火项目管理",
   "entity": "项目文档",
-  "recordID": "rec_xxx",
+  "recordID": "1",
   "field": "invoice"
 }
 --boundary
@@ -333,13 +540,15 @@ Response Body
   "code": 200,
   "msg": "upload file success",
   "data": {
-    "recordID": "rec_xxx",
-    "invoice": {
-      "fileName": "${sha1}.pdf",
-      "filePath": "${org}/${app}/${name}",
-      "fileSizeInBytes": 1048576,
-      "fileURL": "https://dev-make.qtech.cn/api/make/data/v1/download/${filePath}"
-    }
+    "recordID": "1",
+    "invoice": [
+      {
+        "fileName": "realName1.pdf",
+        "filePath": "${org}/${app}/${sha256}.pdf",
+        "fileSizeInBytes": 1048576,
+        "fileURL": "https://dev-make.qtech.cn/api/make/data/v1/download/${filePath}"
+      }
+    ]
   }
 }
 ```
@@ -360,7 +569,7 @@ Request Body
 {
   "app": "烽火项目管理",
   "entity": "项目文档",
-  "recordID": "rec_xxx",
+  "recordID": "1",
   "field": "invoice"
 }
 ```
@@ -372,13 +581,15 @@ Response Body
   "code": 200,
   "msg": "get file success",
   "data": {
-    "recordID": "rec_xxx",
-    "invoice": {
-      "fileName": "${sha1}.pdf",
-      "filePath": "${org}/${app}/${name}",
-      "fileSizeInBytes": 1048576,
-      "fileURL": "https://dev-make.qtech.cn/api/make/data/v1/download/${filePath}"
-    }
+    "recordID": "1",
+    "invoice": [
+      {
+        "fileName": "realName1.pdf",
+        "filePath": "${org}/${app}/${sha256}.pdf",
+        "fileSizeInBytes": 1048576,
+        "fileURL": "https://dev-make.qtech.cn/api/make/data/v1/download/${filePath}"
+      }
+    ]
   }
 }
 ```
@@ -400,7 +611,7 @@ Request Body
 {
   "app": "烽火项目管理",
   "entity": "项目文档",
-  "recordID": "rec_xxx",
+  "recordID": "1",
   "field": "invoice",
   "fileName": "89beb655c86b3794f72faf5fed8392ef97a7db93.md"
 }
@@ -415,3 +626,24 @@ Response Body
   "data": {}
 }
 ```
+
+### 常见字段类型返回结构示例
+
+| 字段类型            | 返回结构示例                                                                                                                                                 | agent 使用提示                  |
+|-----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------|
+| `ID`            | `"SO-2026-0001"`                                                                                                                                       | 按 string 理解，不要当作数值自增主键      |
+| `TEXT`          | `"智能客服升级"`                                                                                                                                             | 单行文本                        |
+| `TEXT_AREA`     | `"升级 FAQ 与工单联动能力"`                                                                                                                                     | 多行文本，仍按 string 处理           |
+| `RICH_TEXT`     | `"<p>需要支持富文本说明</p>"`                                                                                                                                   | 富文本当前也按 string 返回           |
+| `URL`           | `"https://example.com/projects/1"`                                                                                                                     | URL 字符串                     |
+| `NUMBER`        | `95.5`                                                                                                                                                 | 按 number 处理                 |
+| `CURRENCY`      | `"¥1,999.00"`                                                                                                                                          | 已带货币符号，按 string 展示          |
+| `PERCENT`       | `"85.00%"`                                                                                                                                             | 已带 `%`，按 string 展示          |
+| `DATE`          | `"2026-02-24"`                                                                                                                                         | 按 string 理解                 |
+| `DATE_TIME`     | `"2026-02-24 17:00:00"`                                                                                                                                | 按 string 理解                 |
+| `DATE_RANGE`    | `{"begin":"2026-02-24","end":"2026-03-31"}`                                                                                                            | 固定对象结构                      |
+| `SINGLE_SELECT` | `[{"label":"进行中","value":"in_progress"}]`                                                                                                              | 单选也返回数组，通常只有一个元素，label只负责展示 |
+| `MULTI_SELECT`  | `[{"label":"紧急","value":"urgent"},{"label":"对外","value":"external"}]`                                                                                  | 多选返回数组                      |
+| `CASCADING`     | `[{"label":"中国","value":"china"},{"label":"上海","value":"shanghai"}]`                                                                                   | 按层级路径顺序返回                   |
+| `FILE`          | `[{"fileName":"proposal.pdf","filePath":"8/demo-app/project/proposal.pdf","fileURL":"https://cdn.example.com/proposal.pdf","fileSizeInBytes":102400}]` | 文件字段返回附件数组                  |
+| `LOOKUP`        | `产品部，开发部`                                                                                                                                           | 关联字段拼接的字符串，按string理解        |
