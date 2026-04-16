@@ -23,8 +23,6 @@ properties:
     suffix: String # 编号后缀, 配置时可以为空
     code: Integer # 编号数字, 自增, 配置时可以为空
     digit: Integer # 编号长度
-validations:
-  isRequired: Boolean
 ```
 
 > SemanticVersion 表示语义化, 具体可以查看 https://semver.org/
@@ -48,6 +46,10 @@ properties:
 ## TextField | 文本字段
 
 单行文本字段。
+
+### 约束
+
+- `maxLength` 最大值为200
 
 ### TextField DSL
 
@@ -82,6 +84,10 @@ validations:
 ## TextAreaField | 文本框字段
 
 多行文本字段。
+
+### 约束
+
+- `maxLength` 最大值为2000
 
 ### TextAreaField DSL
 
