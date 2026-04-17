@@ -482,9 +482,6 @@ properties:
   relation: Make.Relation
   targetField: FieldName # 对端 Entity 上要查找的字段名
   filter: Expression # Filter 条件
-  transform: # 多条关联记录时的展示策略
-    type: join | first # join: 拼接为字符串; first: 仅取第一条
-    separator: String? # 仅 join 时有效
 ```
 
 ### LookupField 例子
@@ -498,12 +495,6 @@ properties:
   relation: project-task-relation
   # 拿对面哪个字段？ -> 拿 Task 的 '任务状态'
   targetField: 任务状态
-  # 数据转换
-  # 拿回来的是 ["Todo", "Done", "Todo"]
-  # 我们希望在界面上显示为 "Todo | Done | Todo"
-  transform:
-    type: join
-    separator: " | "
 ```
 
 ### Validation | 数据校验
