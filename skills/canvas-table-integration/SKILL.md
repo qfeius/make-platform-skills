@@ -1,6 +1,6 @@
 ---
 name: canvas-table-integration
-description: Use when the user wants to integrate `@qfei/canvas-table` into an existing app or page, including basic local tables, paginated virtual tables, grouped tables, and meta-to-columns scenarios. Read the installed package AI docs first, choose the correct recipe, use only the public consumer-facing API, and verify the integration after editing.
+description: Use when the user wants to integrate `@qfei-design/canvas-table` into an existing app or page, including basic local tables, paginated virtual tables, grouped tables, and meta-to-columns scenarios. Read the installed package AI docs first, choose the correct recipe, use only the public consumer-facing API, and verify the integration after editing.
 version: 0.1.0
 metadata:
   homepage: https://github.com/qfeius/make-platform-skills
@@ -8,11 +8,11 @@ metadata:
 
 # canvas-table-integration
 
-Use this skill only for consumer-side integration of `@qfei/canvas-table`.
+Use this skill only for consumer-side integration of `@qfei-design/canvas-table`.
 
 Typical requests:
 
-- 在页面里接入 `@qfei/canvas-table`
+- 在页面里接入 `@qfei-design/canvas-table`
 - 把现有列表替换成 canvas table
 - 接后端分页表格
 - 接分组表格
@@ -20,7 +20,7 @@ Typical requests:
 
 Do not use this skill for:
 
-- publishing `@qfei/canvas-table`
+- publishing `@qfei-design/canvas-table`
 - editing the table library itself
 - maintaining `package.ai.json`, `recipes.json`, or examples inside the library repo
 - configuring private npm registries
@@ -29,21 +29,26 @@ Do not use this skill for:
 
 Before editing code:
 
-1. Confirm `@qfei/canvas-table` is installed in the current project.
-2. If it is not installed, stop and tell the user to install the package first.
-3. Do not auto-install the dependency unless the user explicitly asks for that action.
+1. Confirm `@qfei-design/canvas-table` is installed in the current project.
+2. If there is no `package.json`, stop and tell the user the current directory is not an npm package.
+3. If it is not installed, detect the package manager from the lockfile and install it before continuing:
+   - `pnpm-lock.yaml` -> `pnpm add @qfei-design/canvas-table`
+   - `yarn.lock` -> `yarn add @qfei-design/canvas-table`
+   - `package-lock.json` -> `npm install @qfei-design/canvas-table`
+4. If no lockfile exists, default to `npm install @qfei-design/canvas-table`.
+5. If install fails, stop and report the command and error.
 
 ## Required read order
 
 Prefer reading from the installed package:
 
-1. `node_modules/@qfei/canvas-table/package.ai.json`
-2. `node_modules/@qfei/canvas-table/docs/agent-usage.md`
-3. `node_modules/@qfei/canvas-table/recipes.json`
-4. `node_modules/@qfei/canvas-table/capabilities.json`
-5. `node_modules/@qfei/canvas-table/PUBLIC_API.md`
+1. `node_modules/@qfei-design/canvas-table/package.ai.json`
+2. `node_modules/@qfei-design/canvas-table/docs/agent-usage.md`
+3. `node_modules/@qfei-design/canvas-table/recipes.json`
+4. `node_modules/@qfei-design/canvas-table/capabilities.json`
+5. `node_modules/@qfei-design/canvas-table/PUBLIC_API.md`
 
-If the project is working directly inside the `@qfei/canvas-table` monorepo, use the source paths instead:
+If the project is working directly inside the `@qfei-design/canvas-table` monorepo, use the source paths instead:
 
 1. `packages/table/package.ai.json`
 2. `packages/table/docs/agent-usage.md`
@@ -88,15 +93,16 @@ Always follow these rules:
 
 ## Implementation workflow
 
-1. Check that the package is installed.
-2. Read the package docs in the required order.
-3. Identify the scenario that matches the current page.
-4. Read the matching recipe in `recipes.json`.
-5. Open the corresponding minimal example.
-6. Adapt that example to the current project with the smallest reasonable diff.
-7. Preserve the project's existing framework and state-management patterns.
-8. Avoid unrelated refactors.
-9. Run at least one concrete verification step if the environment allows it.
+1. Check whether `@qfei-design/canvas-table` is installed.
+2. If it is missing, install it with the lockfile-based package-manager rule above.
+3. Read the package docs in the required order.
+4. Identify the scenario that matches the current page.
+5. Read the matching recipe in `recipes.json`.
+6. Open the corresponding minimal example.
+7. Adapt that example to the current project with the smallest reasonable diff.
+8. Preserve the project's existing framework and state-management patterns.
+9. Avoid unrelated refactors.
+10. Run at least one concrete verification step if the environment allows it.
 
 ## Example priority
 

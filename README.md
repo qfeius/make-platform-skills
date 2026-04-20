@@ -35,7 +35,7 @@ npx skills update makedsl
 - 根据业务的需求生成服务要求的 dsl 文件
 
 ### canvas-table-integration
-指导如何在消费侧项目中接入 `@qfei/canvas-table`
+指导如何在消费侧项目中接入 `@qfei-design/canvas-table`
 
 #### 升级 skill
 ```bash
@@ -43,6 +43,6 @@ npx skills update canvas-table-integration
 ```
 
 **使用场景**
-- 在页面里接入 `@qfei/canvas-table`
+- 在页面里接入 `@qfei-design/canvas-table`
 - 接普通表格、分页表格、分组表格
 - 把 JSON meta 转成 `IColumn[]`
