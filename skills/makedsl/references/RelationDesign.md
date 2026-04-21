@@ -90,7 +90,7 @@ properties:
       properties: null
 ```
 
-> 1:1 时 LookupField 不需要 `transform`，对端永远只有一条记录。
+> 1:1 时 LookupField ，对端永远只有一条记录。
 
 ## 一对多：项目 ↔ 任务
 
@@ -134,9 +134,6 @@ properties:
       properties:
         relation: project-has-tasks
         targetField: 任务名称
-        transform:
-          type: join
-          separator: " | "
     - name: 任务状态概览
       type: Make.Field.Lookup
       meta:
@@ -144,9 +141,6 @@ properties:
       properties:
         relation: project-has-tasks
         targetField: 任务状态
-        transform:
-          type: join
-          separator: " | "
 
 # ===== 任务 Entity =====
 name: 任务
@@ -187,8 +181,8 @@ properties:
         targetField: 项目名称
 ```
 
-> 项目侧 LookupField 对端 cardinality 为 `many`（任务），需要 `transform`。
-> 任务侧 LookupField 对端 cardinality 为 `one`（项目），不需要 `transform`。
+> 项目侧 LookupField 对端 cardinality 为 `many`（任务）。
+> 任务侧 LookupField 对端 cardinality 为 `one`（项目）。
 
 ## 多对多：学生 ↔ 课程
 
@@ -227,9 +221,6 @@ properties:
       properties:
         relation: student-takes-course
         targetField: 课程名称
-        transform:
-          type: join
-          separator: ", "
 
 # ===== 课程 Entity =====
 name: 课程
@@ -257,12 +248,9 @@ properties:
       properties:
         relation: student-takes-course
         targetField: 姓名
-        transform:
-          type: join
-          separator: ", "
 ```
 
-> N:M 两侧 cardinality 都是 `many`，两侧的 LookupField 都需要 `transform`。
+> N:M 两侧 cardinality 都是 `many`。
 
 # Relation 写入
 
