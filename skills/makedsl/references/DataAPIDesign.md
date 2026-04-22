@@ -375,7 +375,7 @@ Response Body
 说明：
 
 - `msg` 是示例性文案，不建议依赖具体文本
-- 上面的示例展示的是“稳定可依赖”的查询结果结构；如果字段类型不同，返回形状也会不同，详见：`常见字段类型返回结构示例`
+- 上面的示例展示的是“稳定可依赖”的查询结果结构；如果字段类型不同，返回结构也会不同，详见：`常规字段类型返回结构示例` 和 `派生字段类型返回结构示例`
 
 ### 分页查询 Record 数据
 
@@ -499,7 +499,7 @@ Response Body
 
 说明：
 
-- 分页查询中的每条元素结构与单条查询的 `data` 完全一致，只是顶层从对象变成数组，数组中的单条数据根据字段类型不同，返回形状也会不同，详见：`常见字段类型返回结构示例`
+- 分页查询中的每条元素结构与单条查询的 `data` 完全一致，只是顶层从对象变成数组，数组中的单条数据根据字段类型不同，返回结构也会不同，详见：`常规字段类型返回结构示例` 和 `派生字段类型返回结构示例`
 - `pagination.total` 表示满足当前筛选条件的总记录数，而不是当前页记录数
 
 
@@ -627,23 +627,77 @@ Response Body
 }
 ```
 
-### 常见字段类型返回结构示例
+## 单条记录与列表读取的选型规则
+
+在 Make Data API 中，单条读取与列表读取必须严格区分。
+
+### 单条记录读取
+当以下条件成立时，必须使用 `MakeService.GetResource`：
+- 已知目标实体
+- 已知目标 `recordID`
+- 目标是获取一条记录本身，而不是一个集合
+
+禁止使用以下实现方式替代：
+- 先调用 `MakeService.ListResources`
+- 再在返回结果中按 `recordID` 过滤目标记录
+
+### 列表读取
+只有在以下场景中，才应使用 `MakeService.ListResources`：
+- 需要返回多条记录
+- 需要分页、搜索、筛选、排序
+- 尚未知道具体 `recordID`
+- 需要读取某个主记录下的关联集合
+
+### 详情接口规则
+实现详情接口时，必须遵循以下拆分：
+- 主对象本体：使用 `GetResource(recordID)`
+- 关联对象集合：按需单独查询并聚合
+- 不允许通过扫描主对象整表来获取详情页本体数据
+
+### 优先级
+如果代码里尚未封装单条读取方法：
+- 优先新增 `GetResource` 封装
+- 不要因为“目前只有列表封装”就退回到整表扫描方案
+
+
+## 常规字段类型返回结构示例
 
 | 字段类型            | 返回结构示例                                                                                                                                                 | agent 使用提示                  |
 |-----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------|
-| `ID`            | `"SO-2026-0001"`                                                                                                                                       | 按 string 理解，不要当作数值自增主键      |
-| `TEXT`          | `"智能客服升级"`                                                                                                                                             | 单行文本                        |
-| `TEXT_AREA`     | `"升级 FAQ 与工单联动能力"`                                                                                                                                     | 多行文本，仍按 string 处理           |
-| `RICH_TEXT`     | `"<p>需要支持富文本说明</p>"`                                                                                                                                   | 富文本当前也按 string 返回           |
-| `URL`           | `"https://example.com/projects/1"`                                                                                                                     | URL 字符串                     |
-| `NUMBER`        | `95.5`                                                                                                                                                 | 按 number 处理                 |
-| `CURRENCY`      | `"¥1,999.00"`                                                                                                                                          | 已带货币符号，按 string 展示          |
-| `PERCENT`       | `"85.00%"`                                                                                                                                             | 已带 `%`，按 string 展示          |
-| `DATE`          | `"2026-02-24"`                                                                                                                                         | 按 string 理解                 |
-| `DATE_TIME`     | `"2026-02-24 17:00:00"`                                                                                                                                | 按 string 理解                 |
-| `DATE_RANGE`    | `{"begin":"2026-02-24","end":"2026-03-31"}`                                                                                                            | 固定对象结构                      |
-| `SINGLE_SELECT` | `[{"label":"进行中","value":"in_progress"}]`                                                                                                              | 单选也返回数组，通常只有一个元素，label只负责展示 |
-| `MULTI_SELECT`  | `[{"label":"紧急","value":"urgent"},{"label":"对外","value":"external"}]`                                                                                  | 多选返回数组                      |
-| `CASCADING`     | `[{"label":"中国","value":"china"},{"label":"上海","value":"shanghai"}]`                                                                                   | 按层级路径顺序返回                   |
-| `FILE`          | `[{"fileName":"proposal.pdf","filePath":"8/demo-app/project/proposal.pdf","fileURL":"https://cdn.example.com/proposal.pdf","fileSizeInBytes":102400}]` | 文件字段返回附件数组                  |
-| `LOOKUP`        | `产品部，开发部`                                                                                                                                           | 关联字段拼接的字符串，按string理解        |
+| `Make.Field.ID`            | `"SO-2026-0001"`                                                                                                                                       | 按 string 理解，不要当作数值自增主键      |
+| `Make.Field.Text`          | `"智能客服升级"`                                                                                                                                             | 单行文本                        |
+| `Make.Field.TextArea`     | `"升级 FAQ 与工单联动能力"`                                                                                                                                     | 多行文本，仍按 string 处理           |
+| `Make.Field.URL`           | `"https://example.com/projects/1"`                                                                                                                     | URL 字符串                     |
+| `Make.Field.Number`        | `95.5`                                                                                                                                                 | 按 number 处理                 |
+| `Make.Field.Currency`      | `"¥1,999.00"`                                                                                                                                          | 已带货币符号，按 string 展示          |
+| `Make.Field.Percent`       | `"85.00%"`                                                                                                                                             | 已带 `%`，按 string 展示          |
+| `Make.Field.Date`          | `"2026-02-24"`                                                                                                                                         | 按 string 理解                 |
+| `Make.Field.DateTime`     | `"2026-02-24 17:00:00"`                                                                                                                                | 按 string 理解                 |
+| `Make.Field.DateRange`    | `{"begin":"2026-02-24","end":"2026-03-31"}`                                                                                                            | 固定对象结构                      |
+| `Make.Field.SingleSelect` | `[{"label":"进行中","value":"in_progress"}]`                                                                                                              | 单选也返回数组，通常只有一个元素，label只负责展示 |
+| `Make.Field.MultiSelect`  | `[{"label":"紧急","value":"urgent"},{"label":"对外","value":"external"}]`                                                                                  | 多选返回数组                      |
+| `Make.Field.File`          | `[{"fileName":"proposal.pdf","filePath":"8/demo-app/project/proposal.pdf","fileURL":"https://cdn.example.com/proposal.pdf","fileSizeInBytes":102400}]` | 文件字段返回附件数组                  |
+
+## 派生字段类型返回结构示例
+
+### Make.Field.Lookup | 查找字段
+
+```json
+{
+  "<lookupFieldName>": {
+    "entity": "<目标对象名称>",
+    "field": "<目标字段名称>",
+    "data": [
+      {
+        "recordID": "<关联记录ID，字符串>",
+        "isDeleted": false,
+        "value": "<按目标字段类型格式化后的值>"
+      }
+    ]
+  }
+}
+```
+
+说明：
+- `isDeleted` 表示此条关联数据是否已经被删除
+- `data[*].value` 返回的数据结构参考 `常规字段类型返回结构示例`
