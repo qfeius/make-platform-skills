@@ -10,14 +10,11 @@ Entity 可以理解是一张 Table, Record 可以理解是一个 Row, 也就是 
 
 ## 约束
 
-- 如果是开放的 API 开放平台域名需要符合这里面的规范
-
-```
-https://dev-make.qtech.cn/api/make
-```
-- 如果两个对象存在 Relation 关系，则在添加或更新数据时需要用 `data.qfei_relation` 传递参数。Relation 建模方式见 @RelationDesign.md
+- 如果两个`Entity`存在 `Relation` 关系，则在添加或更新数据时需要用 `data.qfei_relation` 传递参数。`Relation` 建模方式见 @RelationDesign.md
 - `qfei_relation` 的数组项格式固定为 `{ "entity": "<关联对象名称>", "id": "<关联 recordID>" }`
-- 如果在 A 对象中需要展示 B 对象的字段数据，则必须使用 `LookupField` 实现，禁止通过自定义关联Id字段来实现，`LookupField` 规则详见 @FieldDesign.md
+- 禁止在一个`Entity`中定义与另一个`Entity`语义相同的字段。
+- 禁止通过自定义关联Id字段来描述两个`Entity`的关系，如果在一个`Entity`中需要展示另一个`Entity`的字段数据，则必须使用 `LookupField` 实现。规则详见 @FieldDesign.md
+- 禁止通过前端实现 `Record` 数据列表过滤功能，必须使用后端接口`MakeService.ListResources`的`filter`参数，详见：@EntityDataFilterUsage.md
 
 ## JSON-RPC 接口
 
@@ -384,6 +381,7 @@ Response Body
 - `data` 是 Record 对象数组，每个元素的字段结构与 `GetResource.data` 一致
 - 分页查询比单条查询多一个 `pagination`，其中 `page`、`size`、`total` 分别表示当前页、页大小、总条数
 - `fields`、字段类型解释、选项类字段结构与单条查询完全一致
+- `filter` 筛选参数使用参考 @EntityDataFilterUsage.md
 
 ```
 POST https://dev-make.qtech.cn/api/make/data/v1/record

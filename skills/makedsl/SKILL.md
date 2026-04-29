@@ -1,7 +1,7 @@
 ---
 name: makedsl
 description: Use when designing or generating Make platform DSL YAML — defining apps, entities, fields, relations, views, or record schemas. Also triggered by requests like "建模", "建表", "加字段", "定义关联", or "生成 DSL".
-version: 0.1.4
+version: 0.1.5
 metadata:
   homepage: https://github.com/qfeius/make-platform-skills/makedsl
 ---
