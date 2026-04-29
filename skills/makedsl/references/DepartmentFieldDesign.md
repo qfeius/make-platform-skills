@@ -237,6 +237,7 @@ Response Body
 - MultiDepartmentField 通过 `maxCount` 控制最多可选择的部门数量，默认值以 @FieldDesign.md 为准。
 - MultiDepartmentField 中同一个 `departmentId` 不允许重复出现。
 - 写入 Record 的部门必须来自 Department 分页查询接口返回的当前组织可见部门。
+- 禁止通过前端实现 Department 数据过滤功能，必须使用后端接口`filter`参数实现。
 - 分页查询 Department 候选项时，`filter` 仅支持 `departmentName` 字段。
 - 部门不存在、已删除、不可见或不属于当前组织时，创建或更新 Record 应失败。
 - DepartmentField 不支持通过 `departmentName` 作为唯一标识写入，避免重名造成歧义。

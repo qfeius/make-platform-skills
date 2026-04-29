@@ -237,6 +237,7 @@ Response Body
 - MultiUserField 通过 `maxCount` 控制最多可选择的用户数量，默认值以 @FieldDesign.md 为准。
 - MultiUserField 中同一个 `userId` 不允许重复出现。
 - 写入 Record 的用户必须来自 User 分页查询接口返回的当前组织可见用户。
+- 禁止通过前端实现 User 数据过滤功能，必须使用后端接口`filter`参数实现。
 - 分页查询 User 候选项时，`filter` 仅支持 `userName` 字段。
 - 用户不存在、已停用、不可见或不属于当前组织时，创建或更新 Record 应失败。
 - UserField 不支持通过 `userName` 作为唯一标识写入，避免重名造成歧义。
