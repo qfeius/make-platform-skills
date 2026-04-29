@@ -2,12 +2,12 @@
 
 UserField 用于在业务 Record 中存储和关联组织内用户信息，常见场景包括负责人、协作人、审批人、参与成员。
 
-UserField 的字段类型定义以 `@FieldDesign.md` 为准：
+UserField 的字段类型定义以 @FieldDesign.md 为准：
 
 - `Make.Field.SingleUser`：单选用户，Record 中存储单个 User 对象或 `null`
 - `Make.Field.MultiUser`：多选用户，Record 中存储 User 对象数组，空值为 `[]`
 
-User 数据结构以 `@UserInfo.md` 为准。本文只描述 UserField 和 DataAPI、Record 之间的使用关系，不重复维护完整 UserInfo 字段清单。
+User 数据结构以 @UserInfo.md 为准。本文只描述 UserField 和 DataAPI、Record 之间的使用关系，不重复维护完整 UserInfo 字段清单。
 
 ## User 字段的流程
 
@@ -234,7 +234,7 @@ Response Body
 
 - SingleUserField 非必填时可以写入 `null`；必填时不能为 `null`。
 - MultiUserField 非必填时可以写入 `[]`；必填时数组不能为空。
-- MultiUserField 通过 `maxCount` 控制最多可选择的用户数量，默认值以 `@FieldDesign.md` 为准。
+- MultiUserField 通过 `maxCount` 控制最多可选择的用户数量，默认值以 @FieldDesign.md 为准。
 - MultiUserField 中同一个 `userId` 不允许重复出现。
 - 写入 Record 的用户必须来自 User 分页查询接口返回的当前组织可见用户。
 - 分页查询 User 候选项时，`filter` 仅支持 `userName` 字段。

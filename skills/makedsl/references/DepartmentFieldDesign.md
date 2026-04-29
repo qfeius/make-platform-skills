@@ -2,12 +2,12 @@
 
 DepartmentField 用于在业务 Record 中存储和关联组织部门信息，常见场景包括所属部门、协作部门、审批部门、可见部门。
 
-DepartmentField 的字段类型定义以 `@FieldDesign.md` 为准：
+DepartmentField 的字段类型定义以 @FieldDesign.md 为准：
 
 - `Make.Field.SingleDepartment`：单选部门，Record 中存储单个 Department 对象或 `null`
 - `Make.Field.MultiDepartment`：多选部门，Record 中存储 Department 对象数组，空值为 `[]`
 
-Department 数据结构以 `@DepartmentInfo.md` 为准。本文只描述 DepartmentField 和 DataAPI、Record 之间的使用关系，不重复维护完整 DepartmentInfo 字段清单。
+Department 数据结构以 @DepartmentInfo.md 为准。本文只描述 DepartmentField 和 DataAPI、Record 之间的使用关系，不重复维护完整 DepartmentInfo 字段清单。
 
 ## Department 字段的流程
 
@@ -234,7 +234,7 @@ Response Body
 
 - SingleDepartmentField 非必填时可以写入 `null`；必填时不能为 `null`。
 - MultiDepartmentField 非必填时可以写入 `[]`；必填时数组不能为空。
-- MultiDepartmentField 通过 `maxCount` 控制最多可选择的部门数量，默认值以 `@FieldDesign.md` 为准。
+- MultiDepartmentField 通过 `maxCount` 控制最多可选择的部门数量，默认值以 @FieldDesign.md 为准。
 - MultiDepartmentField 中同一个 `departmentId` 不允许重复出现。
 - 写入 Record 的部门必须来自 Department 分页查询接口返回的当前组织可见部门。
 - 分页查询 Department 候选项时，`filter` 仅支持 `departmentName` 字段。

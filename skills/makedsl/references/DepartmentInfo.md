@@ -7,7 +7,7 @@
     "orgId": 3,
     "platform": 1,
     "leader": {
-      // UserInfo
+      // 用户信息 详见： @UserInfo.md
     },
     "children": [
         {
