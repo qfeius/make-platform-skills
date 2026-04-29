@@ -106,9 +106,9 @@ Response Body
     {
       "userId": 19035,
       "orgId": 31379,
-      "userName": "殷利强",
+      "userName": "张三",
       "avatarOrigin": "https://s1-imfile.feishucdn.com/static-resource/v1/v3_00te_eb78734a-931f-4184-823d-e53a7213500g~?image_size=noop&cut_type=&quality=&format=png&sticker_format=.webp",
-      "departmentPath": "智书企飞 |官方认证服务商/产品研发中心/RD & Customer Value/UED Tech",
+      "departmentPath": "互联科技|产品研发中心",
       "platform": "2",
       "status": 0
     }
@@ -144,19 +144,19 @@ Request Body
     "owner": {
       "userId": 19035,
       "orgId": 31379,
-      "userName": "殷利强",
+      "userName": "张三",
       "avatarOrigin": "https://s1-imfile.feishucdn.com/static-resource/v1/v3_00te_eb78734a-931f-4184-823d-e53a7213500g~?image_size=noop&cut_type=&quality=&format=png&sticker_format=.webp",
-      "departmentPath": "智书企飞 |官方认证服务商/产品研发中心/RD & Customer Value/UED Tech",
+      "departmentPath": "互联科技|产品研发中心",
       "platform": "2",
       "status": 0
     },
     "members": [
       {
-        "userId": 19035,
+        "userId": 19034,
         "orgId": 31379,
-        "userName": "殷利强",
+        "userName": "李四",
         "avatarOrigin": "https://s1-imfile.feishucdn.com/static-resource/v1/v3_00te_eb78734a-931f-4184-823d-e53a7213500g~?image_size=noop&cut_type=&quality=&format=png&sticker_format=.webp",
-        "departmentPath": "智书企飞 |官方认证服务商/产品研发中心/RD & Customer Value/UED Tech",
+        "departmentPath": "互联科技|产品研发中心",
         "platform": "2",
         "status": 0
       }
@@ -209,19 +209,19 @@ Response Body
     "owner": {
       "userId": 19035,
       "orgId": 31379,
-      "userName": "殷利强",
+      "userName": "张三",
       "avatarOrigin": "https://s1-imfile.feishucdn.com/static-resource/v1/v3_00te_eb78734a-931f-4184-823d-e53a7213500g~?image_size=noop&cut_type=&quality=&format=png&sticker_format=.webp",
-      "departmentPath": "智书企飞 |官方认证服务商/产品研发中心/RD & Customer Value/UED Tech",
+      "departmentPath": "互联科技|产品研发中心",
       "platform": "2",
       "status": 0
     },
     "members": [
       {
-        "userId": 19035,
+        "userId": 19034,
         "orgId": 31379,
-        "userName": "殷利强",
+        "userName": "李四",
         "avatarOrigin": "https://s1-imfile.feishucdn.com/static-resource/v1/v3_00te_eb78734a-931f-4184-823d-e53a7213500g~?image_size=noop&cut_type=&quality=&format=png&sticker_format=.webp",
-        "departmentPath": "智书企飞 |官方认证服务商/产品研发中心/RD & Customer Value/UED Tech",
+        "departmentPath": "互联科技|产品研发中心",
         "platform": "2",
         "status": 0
       }
