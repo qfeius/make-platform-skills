@@ -118,8 +118,6 @@ budget >= 100000 AND budget <= 500000
 
 ## 操作符和右值
 
-操作符 token 由 `FilterOperator` 定义。
-
 | 操作符 | 右值格式 | 说明 |
 | --- | --- | --- |
 | `contains` | 标量文本 | 包含 |
@@ -146,28 +144,27 @@ budget >= 100000 AND budget <= 500000
 
 ## 字段类型矩阵
 
-字段是否可筛选、操作符是否可用，都以当前 Entity 元数据中的 `MakeFieldTypeEnum` 为准。
+字段类型详情 @FieldDesign.md
 
-| 字段类型 | 支持操作符 | 右值归一化 |
-| --- | --- | --- |
-| `TEXT` / `TEXT_AREA` / `ID` / `URL` | `contains`、`doesNotContain`、`=`、`!=`、`isEmpty`、`isNotEmpty` | 非空标量转字符串 |
-| `SINGLE_SELECT` | `=`、`!=`、`isAnyOf`、`isNoneOf`、`isEmpty`、`isNotEmpty` | 单值为字符串，多选项为去重字符串数组 |
-| `SINGLE_USER` / `SINGLE_DEPT` | `=`、`!=`、`isAnyOf`、`isNoneOf`、`isEmpty`、`isNotEmpty` | 人员或部门 ID 归一化为 `Long` 或去重 `Long[]` |
-| `MULTI_SELECT` | `hasAnyOf`、`hasAllOf`、`hasNoneOf`、`=`、`isEmpty`、`isNotEmpty` | 去重字符串数组 |
-| `MULTI_USER` / `MULTI_DEPT` | `hasAnyOf`、`hasAllOf`、`hasNoneOf`、`=`、`isEmpty`、`isNotEmpty` | 去重 `Long[]` |
-| `NUMBER` / `CURRENCY` / `PERCENT` | `=`、`!=`、`>`、`>=`、`<`、`<=`、`isEmpty`、`isNotEmpty` | `BigDecimal` |
-| `DATE` | `=`、`!=`、`>`、`>=`、`<`、`<=`、`isWithin`、`isNotWithin`、`isEmpty`、`isNotEmpty` | 严格日期字符串，格式为 `yyyy-MM-dd` |
-| `DATE_TIME` | `=`、`!=`、`>`、`>=`、`<`、`<=`、`isWithin`、`isNotWithin`、`isEmpty`、`isNotEmpty` | 严格日期时间字符串，格式为 `yyyy-MM-dd HH:mm:ss` |
-| `DATE_RANGE` | `containsDate`、`doesNotContainDate`、`fullyContains`、`isContainedBy`、`=`、`isEmpty`、`isNotEmpty` | 日期或 `{ "begin": "yyyy-MM-dd", "end": "yyyy-MM-dd" }` |
-| `FILE` | `contains`、`doesNotContain`、`>`、`<`、`=`、`isEmpty`、`isNotEmpty` | 文件名文本或附件数量 |
-| `LOOKUP` | 暂不支持 | 会报字段类型暂不支持 |
+| 字段类型                                                                          | 支持操作符 | 右值归一化 |
+|-------------------------------------------------------------------------------| --- | --- |
+| `Make.Field.Text` / `Make.Field.TextArea` / `Make.Field.ID` / `Make.Field.URL`| `contains`、`doesNotContain`、`=`、`!=`、`isEmpty`、`isNotEmpty` | 非空标量转字符串 |
+| `Make.Field.SingleSelect`                                                     | `=`、`!=`、`isAnyOf`、`isNoneOf`、`isEmpty`、`isNotEmpty` | 单值为字符串，多选项为去重字符串数组 |
+| `Make.Field.SingleUser` / `Make.Field.SingleDepartment`                       | `=`、`!=`、`isAnyOf`、`isNoneOf`、`isEmpty`、`isNotEmpty` | 人员或部门 ID 归一化为 `Long` 或去重 `Long[]` |
+| `Make.Field.MultiSelect` /                                                    | `hasAnyOf`、`hasAllOf`、`hasNoneOf`、`=`、`isEmpty`、`isNotEmpty` | 去重字符串数组 |
+| `Make.Field.MultiUser` / `Make.Field.MultiDepartment`                         | `hasAnyOf`、`hasAllOf`、`hasNoneOf`、`=`、`isEmpty`、`isNotEmpty` | 去重 `Long[]` |
+| `Make.Field.Number` / `Make.Field.Currency` / `Make.Field.Percent`            | `=`、`!=`、`>`、`>=`、`<`、`<=`、`isEmpty`、`isNotEmpty` | `BigDecimal` |
+| `Make.Field.Date`                                                             | `=`、`!=`、`>`、`>=`、`<`、`<=`、`isWithin`、`isNotWithin`、`isEmpty`、`isNotEmpty` | 严格日期字符串，格式为 `yyyy-MM-dd` |
+| `Make.Field.DateTime`                                                         | `=`、`!=`、`>`、`>=`、`<`、`<=`、`isWithin`、`isNotWithin`、`isEmpty`、`isNotEmpty` | 严格日期时间字符串，格式为 `yyyy-MM-dd HH:mm:ss` |
+| `Make.Field.DateRange`                                                        | `containsDate`、`doesNotContainDate`、`fullyContains`、`isContainedBy`、`=`、`isEmpty`、`isNotEmpty` | 日期或 `{ "begin": "yyyy-MM-dd", "end": "yyyy-MM-dd" }` |
+| `Make.Field.File`                                                             | `contains`、`doesNotContain`、`>`、`<`、`=`、`isEmpty`、`isNotEmpty` | 文件名文本或附件数量 |
+| `Make.Field.Lookup`                                                           | 暂不支持 | 会报字段类型暂不支持 |
 
 注意：
 
 - `isEmpty` 和 `isNotEmpty` 不接受右值；如果右值不是 `null`，会报错。
 - 数组型右值必须是非空数组。
 - 日期区间对象必须同时包含非空 `begin` 和 `end`。
-- `DATE_TIME` 会按应用时区归一化到 `Asia/Shanghai` 后再构造 SQL 条件。
 
 ## 常见示例
 
@@ -293,7 +290,7 @@ budget >= 100000 AND budget <= 500000
 | `filter` 是空数组 | 参数错误，`filter` 不能为空 |
 | group 是空对象 | 参数错误，条件组不能为空 |
 | 字段名不在 Entity 元数据中 | 参数错误，字段不存在 |
-| 字段类型是 `LOOKUP` | 参数错误，字段类型暂不支持 |
+| 字段类型是 `Make.Field.Lookup` | 参数错误，字段类型暂不支持 |
 | 操作符 token 不存在 | 参数错误，不支持的操作符 |
 | 操作符与字段类型不匹配 | 参数错误，字段类型与操作符不匹配 |
 | 文本右值是数组或对象 | 参数错误，筛选值类型错误 |
@@ -309,5 +306,5 @@ budget >= 100000 AND budget <= 500000
 3. 需要 `OR` 时，增加多个 group。
 4. 需要 `AND` 时，把多个字段条件放在同一个 group。
 5. 需要同一字段上下限时，把多个操作符放在同一个字段对象内。
-6. 不要对 `LOOKUP` 字段生成筛选条件。
+6. 不要对 `Make.Field.Lookup` 字段生成筛选条件。
 
