@@ -13,7 +13,7 @@ Entity 可以理解是一张 Table, Record 可以理解是一个 Row, 也就是 
 - 如果两个`Entity`存在 `Relation` 关系，则在添加或更新数据时需要用 `data.qfei_relation` 传递参数。`Relation` 建模方式见 @RelationDesign.md
 - `qfei_relation` 的数组项格式固定为 `{ "entity": "<关联对象名称>", "id": "<关联 recordID>" }`
 - 禁止在一个`Entity`中定义与另一个`Entity`语义相同的字段。
-- 禁止通过自定义关联Id字段来描述两个`Entity`的关系，如果在A`Entity`中需要展示B`Entity`的字段数据，则必须使用 `LookupField` 实现。规则详见 @FieldDesign.md
+- 禁止通过自定义关联Id字段来描述两个`Entity`的关系，如果在一个`Entity`中需要展示别一个`Entity`的字段数据，则必须使用 `LookupField` 实现。规则详见 @FieldDesign.md
 
 ## JSON-RPC 接口
 
