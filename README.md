@@ -46,3 +46,15 @@ npx skills update canvas-table-integration
 - 在页面里接入 `@qfei-design/canvas-table`
 - 接普通表格、分页表格、分组表格
 - 把 JSON meta 转成 `IColumn[]`
+
+### make-integration
+Make 集成服务, 扩展 make 平台的能力, 目前集成能力有
+- 发票 OCR
+
+#### 升级 skill
+```bash
+npx skills update make-integration
+```
+
+**使用场景**
+- 识别发票(打车, 火车票, 宾馆, 餐饮等)的内容(金额等相关信息)
