@@ -110,10 +110,6 @@ When reporting results to the user:
 - Mask or replace special and personal information only in skill documentation examples, committed samples, logs, or debug snippets.
 - If the OCR result will be written to Make records, invoke the `makecli` skill for record operations after recognition.
 
-### API and flag mapping
-
-Read `@references/integration-ocr.md` for the Make Integration OCR API contract and the mapping between makecli flags, multipart fields, and query parameters.
-
 ### Failure handling
 
 - `API 错误 [990300403]: token验证失败`
