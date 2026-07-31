@@ -36,7 +36,7 @@ Use the public npm package by default when the SDK behavior is stable:
 ```json
 {
   "dependencies": {
-    "@qfeius/make-app-auth": "^0.1.3"
+    "@qfeius/make-app-auth": "^0.1.4"
   }
 }
 ```
@@ -44,10 +44,10 @@ Use the public npm package by default when the SDK behavior is stable:
 Install command:
 
 ```bash
-pnpm add @qfeius/make-app-auth@^0.1.3 --registry=https://registry.npmjs.org/
+pnpm add @qfeius/make-app-auth@^0.1.4 --registry=https://registry.npmjs.org/
 ```
 
-Published unified-login Apps require `@qfeius/make-app-auth >= 0.1.3`. Do not generate or publish Apps with older npm dependencies.
+Published unified-login Apps require `@qfeius/make-app-auth >= 0.1.4`. Do not generate or publish Apps with older npm dependencies.
 
 ## Startup Shape
 

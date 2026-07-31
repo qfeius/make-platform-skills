@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const SDK_PACKAGE_NAME = '@qfeius/make-app-auth';
-const MINIMUM_SDK_VERSION = [0, 1, 3];
+const MINIMUM_SDK_VERSION = [0, 1, 4];
 
 const USAGE = `Usage:
   node skills/make-app-auth/scripts/audit-auth-contract.mjs <project-root> [--mode direct|service-fronted|auto] [--published]
@@ -97,26 +97,26 @@ if (hasTokenMode(uiText) || hasServiceTokenModeWithoutLocalPreview(serviceText))
 
 if (published) {
   if (sdkDependencyDeclarations.length === 0) {
-    failures.push('sdk_version_missing: published Apps must declare @qfeius/make-app-auth >= 0.1.3 in package.json');
+    failures.push('sdk_version_missing: published Apps must declare @qfeius/make-app-auth >= 0.1.4 in package.json');
   }
   for (const declaration of sdkDependencyDeclarations) {
     const status = classifySdkVersionRange(declaration.version, MINIMUM_SDK_VERSION);
     if (status === 'too-old') {
-      failures.push(`sdk_version_too_old: ${relative(declaration.file)} declares @qfeius/make-app-auth ${declaration.version}; published Apps require >= 0.1.3`);
+      failures.push(`sdk_version_too_old: ${relative(declaration.file)} declares @qfeius/make-app-auth ${declaration.version}; published Apps require >= 0.1.4`);
     } else if (status === 'unverifiable') {
-      failures.push(`sdk_version_unverifiable: ${relative(declaration.file)} declares unsupported @qfeius/make-app-auth source ${declaration.version}; published Apps require a verifiable registry range >= 0.1.3`);
+      failures.push(`sdk_version_unverifiable: ${relative(declaration.file)} declares unsupported @qfeius/make-app-auth source ${declaration.version}; published Apps require a verifiable registry range >= 0.1.4`);
     }
   }
   for (const override of sdkVersionOverrides) {
     const status = classifySdkVersionRange(override.version, MINIMUM_SDK_VERSION);
     if (status === 'too-old') {
-      failures.push(`sdk_version_override_too_old: ${relative(override.file)} ${override.source} forces @qfeius/make-app-auth ${override.version}; published Apps require >= 0.1.3`);
+      failures.push(`sdk_version_override_too_old: ${relative(override.file)} ${override.source} forces @qfeius/make-app-auth ${override.version}; published Apps require >= 0.1.4`);
     } else if (status === 'unverifiable') {
-      failures.push(`sdk_version_override_unverifiable: ${relative(override.file)} ${override.source} uses unsupported @qfeius/make-app-auth source ${override.version}; published Apps require a verifiable registry range >= 0.1.3`);
+      failures.push(`sdk_version_override_unverifiable: ${relative(override.file)} ${override.source} uses unsupported @qfeius/make-app-auth source ${override.version}; published Apps require a verifiable registry range >= 0.1.4`);
     }
   }
   if (!/apiAuthRedirect\s*:\s*true/.test(projectText)) {
-    warnings.push('published_api_auth_redirect_missing: generated unified-login Apps should set apiAuthRedirect:true with SDK >= 0.1.3');
+    warnings.push('published_api_auth_redirect_missing: generated unified-login Apps should set apiAuthRedirect:true with SDK >= 0.1.4');
   }
   if (hasUnsupportedSdkReadyStatus(uiText)) {
     failures.push('unsupported_sdk_ready_status: @qfeius/make-app-auth init returns authenticated/redirecting/unauthenticated/forbidden/failed, not ready');
@@ -146,6 +146,9 @@ if (inferredMode === 'service-fronted') {
   const hasOauthNamespaceProxy = hasServiceFrontedNamespaceProxy(serviceText, 'oauth');
   if (!hasAuthNamespaceProxy || !hasOauthNamespaceProxy) {
     failures.push('auth_proxy_missing: Service-fronted App must proxy /api/make/auth/** and /api/make/oauth/** as namespace-level routes to make-gateway');
+  }
+  if ((hasAuthNamespaceProxy || hasOauthNamespaceProxy) && hasQueryDroppingNamespaceProxy(serviceText)) {
+    failures.push('auth_proxy_query_not_preserved: auth/oauth namespace proxies must preserve query strings; do not build upstream URLs from req.path or request.path alone');
   }
   if (hasBroadMakeGatewayPassthrough(serviceText)) {
     failures.push('service_fronted_catch_all_passthrough: Service-fronted App must not proxy broad /api/make/** traffic to make-gateway; keep auth/oauth namespace proxies and explicit /api/make/app/** business routes');
@@ -242,7 +245,7 @@ function collectSourceFiles(start) {
 }
 
 function shouldSkipDir(name) {
-  return new Set(['.git', 'node_modules', 'dist', 'build', 'coverage', '.next', '.turbo']).has(name);
+  return new Set(['.git', '.agents', 'agent', 'node_modules', 'dist', 'build', 'coverage', '.next', '.turbo']).has(name);
 }
 
 function isSourceFile(file) {
@@ -724,6 +727,15 @@ function hasQuerySensitivePreviewAuthRouteMatch(text) {
   ];
 
   return previewPathLiterals.some((pathLiteral) => hasRawUrlEqualityForPreviewPath(text, pathLiteral));
+}
+
+function hasQueryDroppingNamespaceProxy(text) {
+  const patterns = [
+    /proxy(?:Gateway|Make)?Namespace\s*\([\s\S]{0,320}\b(?:req|request)\.path\s*[,)]/gi,
+    /\bupstream(?:Path|Url)?\b[\s\S]{0,240}\b(?:req|request)\.path\b/gi,
+    /fetch\s*\([\s\S]{0,240}\b(?:req|request)\.path\b/gi,
+  ];
+  return patterns.some((pattern) => pattern.test(text));
 }
 
 function hasRawUrlEqualityForPreviewPath(text, pathLiteral) {

@@ -54,12 +54,24 @@ try {
 
   assert.match(runAudit(goodRoot), /status: PASS/);
 
-  for (const version of ['^0.1.3', '0.1.3', '>0.1.2', '>=0.1.3 <0.2.0', '0.1.3 - 0.2.0', '^1.0.0']) {
+  writeSdkDependency(goodRoot, '^0.1.3');
+  const previousSdkOutput = runAudit(goodRoot, { expectFailure: true });
+  assert.match(previousSdkOutput, /sdk_version_too_old/);
+  writeSdkDependency(goodRoot, '^0.1.4');
+
+  write(
+    path.join(goodRoot, 'agent/skills/make-app-auth/example.ts'),
+    `const legacyExamplePath = '/api/auth/session/complete';`,
+  );
+  assert.match(runAudit(goodRoot), /status: PASS/);
+  fs.rmSync(path.join(goodRoot, 'agent'), { recursive: true, force: true });
+
+  for (const version of ['^0.1.4', '0.1.4', '>0.1.3', '>=0.1.4 <0.2.0', '0.1.4 - 0.2.0', '^1.0.0']) {
     writeSdkDependency(goodRoot, version);
     assert.match(runAudit(goodRoot), /status: PASS/, `expected ${version} to pass`);
   }
 
-  for (const version of ['^0.1.2', '<0.1.3', '>=0.1.3 || 0.1.2']) {
+  for (const version of ['^0.1.3', '<0.1.4', '>=0.1.4 || 0.1.3']) {
     writeSdkDependency(goodRoot, version);
     const output = runAudit(goodRoot, { expectFailure: true });
     assert.match(output, /sdk_version_too_old/, `expected ${version} to be rejected as too old`);
@@ -71,12 +83,12 @@ try {
     assert.match(output, /sdk_version_unverifiable/, `expected ${version} to be rejected as unverifiable`);
   }
 
-  writeSdkDependency(goodRoot, '^0.1.3');
+  writeSdkDependency(goodRoot, '^0.1.4');
   write(path.join(goodRoot, 'pnpm-workspace.yaml'), `
 packages:
   - apps/*
 overrides:
-  '@qfeius/make-app-auth': 0.1.2
+  '@qfeius/make-app-auth': 0.1.3
   `);
   const pnpmOverrideOutput = runAudit(goodRoot, { expectFailure: true });
   assert.match(pnpmOverrideOutput, /sdk_version_override_too_old/);
@@ -84,7 +96,7 @@ overrides:
 
   write(
     path.join(goodRoot, 'pnpm-workspace.yaml'),
-    `overrides: { unrelated-package: 1.0.0, '@qfeius/make-app-auth': 0.1.2 }`
+    `overrides: { unrelated-package: 1.0.0, '@qfeius/make-app-auth': 0.1.3 }`
   );
   const pnpmInlineOverrideOutput = runAudit(goodRoot, { expectFailure: true });
   assert.match(pnpmInlineOverrideOutput, /sdk_version_override_too_old/);
@@ -93,7 +105,7 @@ overrides:
   write(path.join(goodRoot, 'package.json'), JSON.stringify({
     private: true,
     overrides: {
-      '@qfeius/make-app-auth': '0.1.2'
+      '@qfeius/make-app-auth': '0.1.3'
     }
   }));
   const npmOverrideOutput = runAudit(goodRoot, { expectFailure: true });
@@ -112,7 +124,7 @@ overrides:
     private: true,
     pnpm: {
       overrides: {
-        '@qfeius/make-app-auth': '^0.1.3'
+        '@qfeius/make-app-auth': '^0.1.4'
       }
     }
   }));
@@ -168,7 +180,7 @@ overrides:
 
   assert.match(runAudit(antdThemeTokenRoot), /status: PASS/);
 
-  const constantNamespaceProxyRoot = createFixture('constant-namespace-proxy', {
+  const queryDroppingNamespaceProxyRoot = createFixture('query-dropping-namespace-proxy', {
     ui: `
       import { createMakeAppAuth } from '@qfeius/make-app-auth';
       const auth = createMakeAppAuth({ gatewayBaseUrl: '/api/make', unifiedLogin: true, apiAuthRedirect: true });
@@ -210,7 +222,8 @@ overrides:
     `
   });
 
-  assert.match(runAudit(constantNamespaceProxyRoot), /status: PASS/);
+  const queryDroppingNamespaceProxyOutput = runAudit(queryDroppingNamespaceProxyRoot, { expectFailure: true });
+  assert.match(queryDroppingNamespaceProxyOutput, /auth_proxy_query_not_preserved/);
 
   const localPreviewServiceRoot = createFixture('local-preview-service-token-adapter', {
     ui: `
@@ -980,7 +993,7 @@ function createFixture(name, files) {
   const root = path.join(tempRoot, name);
   write(path.join(root, 'apps/ui/package.json'), JSON.stringify({
     dependencies: {
-      '@qfeius/make-app-auth': '^0.1.3'
+      '@qfeius/make-app-auth': '^0.1.4'
     }
   }));
   write(path.join(root, 'apps/ui/src/app.ts'), files.ui);
