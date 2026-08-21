@@ -62,6 +62,8 @@ The preview auth routes must be strictly gated. Do not register or mount preview
 
 Match preview auth routes by path only, never by a raw URL string that may include a query string. The SDK can call `/api/make/auth/current-context?return_url=...`; that must still return the local preview context when `MAKE_APP_LOCAL_PREVIEW=true`. In Fetch-style handlers, compare `new URL(request.url).pathname`. In Express handlers mounted at `/api/make/auth`, compare `req.path` to `/current-context` or `/runtime-view`. Do not use exact equality against `req.url` or `req.originalUrl` for these preview routes.
 
+Use `.path` only for the preview-route comparison above. For the namespace proxy, preserve the complete relative URL, including its query string: forward mounted Express `req.url`, or reconstruct `pathname + search` from `req.originalUrl`. Never construct the auth/oauth upstream URL from `req.path` alone because `session/complete?login_ticket=...` would lose the ticket.
+
 Safe shape:
 
 ```ts
