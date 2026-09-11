@@ -2,45 +2,60 @@
 name: make-env-setup
 description: Use when preparing or updating the local Make development environment before development. Triggered by Make 环境安装, Make 环境初始化, 更新 Make 环境. Does not manage Make resources, deploy Apps, or write PRD, DSL, Service, or UI code; use makecli for resource/deploy operations and the owning skills for implementation.
 metadata:
-  version: 0.4.0
+  version: 0.4.1
   homepage: https://github.com/qfeius/make-platform-skills
 ---
 
 # make-env-setup
+
 Get this machine ready to build a Make App: install the toolchain, verify Make login, and initialize the project folder. Run it on a new machine, and again whenever the tools need updating.
 
-
 ## Safety Rules
+
 - Do not print or store tokens, cookies, Authorization headers, passwords, or secrets.
 - Do not manually create PRD, DSL, Service, or UI files; only run `makecli app init` in the selected directory.
 - Interactive secret entry must be completed by the user. Do not ask the user to paste secrets into chat.
+- `npm` may install the standalone `makecli` binary only. Do not use `npm` to install pnpm or Make App dependencies.
 
 ## Install Or Update Toolchain
 
-The only prerequisite is Node.js (LTS, 20 or newer); it ships `npm`, and everything else installs through `npm`. Never touch a tool that exists but is managed elsewhere (for example node via nvm, pnpm via corepack) — note it in the summary instead.
+This skill supports macOS, Linux, and Windows. For Make App work, the runtime is fixed: Node.js `22.20.0`, its bundled Corepack `0.34.0`, and `pnpm@10.20.0`. Do not substitute a moving LTS release, a Homebrew or global pnpm binary, or a newer Corepack release.
 
-1. Ensure `node`, `git`, and `pnpm` exist.
+1. Ensure exact Node.js `22.20.0` and `git` are available. If either is missing, install it with the platform's own method only after the user confirms.
 
-   `node` and `git` are system-level installs; if either is missing, install it with the platform's own method — but only after the user confirms:
-
-   | Platform | Node.js | git |
+   | Platform | Node.js `22.20.0` | git |
    |---|---|---|
-   | macOS | [nodejs.org](https://nodejs.org/) installer, or `brew install node` if Homebrew is already present | `xcode-select --install` |
-   | Linux | distro package (`apt install nodejs npm`, `dnf install nodejs`) or [nvm](https://github.com/nvm-sh/nvm) | distro package (`apt install git`) |
-   | Windows | `winget install OpenJS.NodeJS.LTS` or [nodejs.org](https://nodejs.org/) installer | `winget install Git.Git` |
+   | macOS | Install and select with `nvm install 22.20.0` then `nvm use 22.20.0`; if nvm is unavailable, use an exact-version manager selected by the user | `xcode-select --install`, or Homebrew if already present |
+   | Linux | Install and select with `nvm install 22.20.0` then `nvm use 22.20.0`; if nvm is unavailable, use an exact-version manager selected by the user | distro package, for example `apt install git` |
+   | Windows | Use an exact-version manager such as nvm-windows to install and select `22.20.0`, or the official Node.js `22.20.0` installer | `winget install Git.Git` |
 
-   Open a new terminal after installing Node so `npm` and its global bin directory are on `PATH`. If `pnpm` is missing, `npm install -g pnpm`.
+   Do not use a moving package-manager formula such as `brew install node`, `apt install nodejs`, or `winget install OpenJS.NodeJS.LTS` for the Make App runtime. If no exact-version Node manager is available, stop and ask the user to select one.
 
-2. Install or update `makecli`. If `makecli` exists, run `makecli update --skip-skills`; otherwise `npm install -g @qfeius/makecli`. `makecli update` knows how it was installed: an npm or pnpm install is upgraded through that package manager, any other install replaces the binary in place.
+2. Verify the fixed Node.js and Corepack baseline before installing pnpm. The checks below are cross-platform and must both pass:
 
-   If `npm install -g` fails with `EACCES`, do not use `sudo`. Point npm's global prefix at a user-owned directory, add it to `PATH`, then retry:
+   ```bash
+   node -e 'if (process.versions.node !== "22.20.0") { throw new Error(`Make Apps require Node.js 22.20.0; got ${process.versions.node}`) }'
+   node -e 'const { execFileSync } = require("node:child_process"); const actual = execFileSync("corepack", ["--version"], { encoding: "utf8" }).trim(); if (actual !== "0.34.0") { throw new Error(`Corepack must report 0.34.0; got ${actual}`) }'
+   ```
+
+3. Enable Corepack and cache the fixed Make App pnpm baseline. Make Apps must use `pnpm@10.20.0`; do not install pnpm through npm, Homebrew, or another global package manager. Use `corepack install -g`, not the deprecated `corepack prepare`.
+
+   ```bash
+   corepack enable
+   corepack install -g pnpm@10.20.0
+   node -e 'const { execFileSync } = require("node:child_process"); const actual = execFileSync("corepack", ["pnpm", "--version"], { encoding: "utf8" }).trim(); if (actual !== "10.20.0") { throw new Error(`pnpm must report 10.20.0; got ${actual}`) }'
+   ```
+
+4. Install or update `makecli`. If `makecli` exists, run `makecli update --skip-skills`; otherwise run `npm install -g @qfeius/makecli`. `makecli update` knows how it was installed: an npm or pnpm install is upgraded through that package manager, and any other installation replaces the binary in place.
+
+   If the npm global install fails with `EACCES` on macOS or Linux, do not use `sudo`. Point npm's global prefix at a user-owned directory, add it to `PATH`, then retry:
 
    ```bash
    npm config set prefix "$HOME/.npm-global"
    export PATH="$HOME/.npm-global/bin:$PATH"   # also add this line to the shell profile
    ```
 
-3. Install or update Make platform skills every run.
+5. Install or update Make platform skills every run.
 
    ```bash
    npx skills add qfeius/make-platform-skills --all -y
@@ -55,10 +70,13 @@ After install or update, run all checks and show a compact summary:
 ```bash
 node --version
 npm --version
-pnpm --version
+corepack --version
+corepack pnpm --version
 git --version
 makecli version
 ```
+
+The Node check must report exactly `v22.20.0`, the Corepack check exactly `0.34.0`, and the pnpm check exactly `10.20.0`. If any check fails, stop and repair the active Node runtime or Corepack activation; do not continue with a different version.
 
 ## Verify Token With Guided Login
 
@@ -118,7 +136,7 @@ The user must complete interactive secret entry in their own terminal. After the
 
 End only after the toolchain is installed and verified, the token is valid (initial verification passed or the login flow succeeded), and `makecli app init` succeeded. Use a concise readiness report:
 
-- Tool versions: Node, npm, pnpm, git, makecli.
+- Tool versions: Node, npm, Corepack, pnpm, git, makecli.
 - Make skills result.
 - Login status: already valid or refreshed with `makecli login`.
 - App folder: the initialized directory.
