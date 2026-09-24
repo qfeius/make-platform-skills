@@ -106,6 +106,7 @@ assert.deepEqual(
 );
 
 assert.match(skill, /references\/mobile-defaults\.md/);
+assert.match(skill, /metadata:\s*\n\s*version:\s*0\.4\.19/);
 assert.match(skill, /references\/mobile-form-controls\.md/);
 assert.match(skill, /references\/mobile-product-baseline\.md/);
 assert.match(skill, /references\/mobile-visual-standard\.md/);
@@ -122,9 +123,11 @@ assert.match(
 );
 assert.match(
   mobileDefaults,
-  /corepack pnpm add @qfei-design\/make-app-mobile@\^0\.1\.7/,
-  'mobile defaults must install the required 0.1.7 baseline',
+  /corepack pnpm add @qfei-design\/make-app-mobile@\^0\.1\.9/,
+  'mobile defaults must install the current 0.1.9 visual baseline',
 );
+assert.match(mobileDefaults, /最低 API 基线为 `0\.1\.7`/);
+assert.match(mobileDefaults, /0\.1\.9[^\n]*视觉/);
 assert.match(mobileDefaults, /package\.ai\.json/);
 assert.match(mobileDefaults, /PUBLIC_API\.md/);
 assert.match(
@@ -169,6 +172,33 @@ assert.match(
 );
 assert.match(
   mobileFormControls,
+  /所有可编辑的原生\s*`?input`?[、／/]\s*`?textarea`?[\s\S]{0,180}16px/,
+  'all editable phone inputs, including picker search and numeric fields, must avoid iOS focus zoom',
+);
+assert.match(
+  mobileFormControls,
+  /保留 viewport 的用户缩放能力[^\n]*不用 `user-scalable=no` 或 `maximum-scale=1`/,
+  'phone guidance must not suppress user zoom to hide an iOS input-size defect',
+);
+assert.match(
+  mobileFormControls,
+  /滚动容器若声明 `touch-action`，须包含 `pinch-zoom`/,
+  'phone scrollers must preserve user pinch zoom',
+);
+assert.match(skill, /verify-mobile-package-surface\.mjs/);
+assert.match(mobileDefaults, /verify-mobile-package-surface\.mjs/);
+assert.match(
+  mobileDefaults,
+  /静态校验[^\n]*不能替代[^\n]*实际计算字号[^\n]*真实 iOS/i,
+  'package CSS scanning must not be described as proof of focused iOS computed styles',
+);
+assert.match(
+  mobileDefaults,
+  /校验失败[^\n]*(依赖|package)[^\n]*(阻断|blocker)[^\n]*(不得|不能)[^\n]*(完成|符合)/,
+  'an installed package without the required iOS and attachment surface must block completed mobile delivery',
+);
+assert.match(
+  mobileFormControls,
   /`Date`[^\n]*(年[^\n]*月[^\n]*日|year[^\n]*month[^\n]*day)[^\n]*(三列|3-column)[^\n]*(滚轮|wheel)/i,
   'phone Date fields must use the standard year/month/day wheel sheet',
 );
@@ -200,10 +230,11 @@ assert.match(mobileVisualStandard, /所有字段值内容靠右对齐/);
 assert.match(mobileVisualStandard, /calc\(100%\s*-\s*8px\)[\s\S]{0,100}(4px|4 px)/i);
 assert.match(mobileVisualStandard, /(清除|clear)[^\n]*(左侧|left)[^\n]*(确定|confirm)[^\n]*(右侧|right)/i);
 assert.match(mobileVisualStandard, /MobileFormActionBar[^\n]*(无图标)[^\n]*(靠右)/);
+assert.match(mobileVisualStandard, /MobileAttachmentField[^\n]*48px/);
 assert.match(mobileVisualStandard, /滚轮[^\n]*五行、每行 48px[^\n]*中线/);
 assert.match(mobileVisualStandard, /不使用浏览器原生 `select`/);
 assert.match(mobileVisualStandard, /MobileOptionPickerSheet[\s\S]{0,80}MobileDateField[\s\S]{0,40}MobileDateRangeField/);
-assert.match(readme, /@qfei-design\/make-app-mobile@\^0\.1\.7/);
+assert.match(readme, /@qfei-design\/make-app-mobile@\^0\.1\.9/);
 assert.doesNotMatch(readme, /@qfei-design\/make-app-mobile@\^0\.1\.[56]/);
 const filterRoutingRow = readme.split(/\r?\n/).find((line) => line.startsWith('| 筛选'));
 assert.ok(filterRoutingRow, 'README must keep a filter routing row');
@@ -272,8 +303,43 @@ assert.match(
 );
 assert.match(
   mobileFormControls,
-  /(长文本|TextArea)[^\n]*(附件|File)[^\n]*(复杂多值|complex multi-value)[^\n]*(上方标签|top label)[^\n]*(下方内容|content below)/i,
-  'wide and complex phone fields must use a top-label/content-below skeleton',
+  /附件 `File`[^\n]*上方标签[^\n]*下方内容/,
+  'only phone attachments may use the full-width stacked field skeleton',
+);
+assert.match(
+  mobileFormControls,
+  /除附件 `File` 外[^\n]*左侧标签槽位[^\n]*右侧值槽位/,
+  'phone form values must retain a reserved label slot and right-side value slot',
+);
+assert.match(
+  mobileFormControls,
+  /`TextArea`[^\n]*默认两行[^\n]*自动增长/,
+  'phone textareas must start at two rows and grow with content',
+);
+assert.match(
+  mobileFormControls,
+  /多选值[^\n]*可换行[^\n]*字段行向下撑开/,
+  'phone multi-value fields must wrap and grow in the right-side slot',
+);
+assert.match(
+  mobileFormControls,
+  /`Number`、`Currency`、`Percent`[^\n]*无步幅调节按钮[^\n]*普通文本输入[^\n]*`inputMode="decimal"`[^\n]*桌面可保留数字控件/,
+  'phone numeric fields must use plain text input without steppers while desktop stays unchanged',
+);
+assert.match(
+  mobileFormControls,
+  /手机详情[^\n]*除附件外[^\n]*左侧标签槽位[^\n]*右侧槽位[^\n]*尾端对齐/,
+  'phone details must preserve the same right-side value slot as forms',
+);
+assert.match(
+  mobileVisualStandard,
+  /只有附件 `File`[^\n]*上下结构[^\n]*全宽/,
+  'phone visual guidance must reserve the stacked full-width layout for attachments',
+);
+assert.doesNotMatch(
+  `${mobileFormControls}\n${mobileVisualStandard}`,
+  /长文本[^\n]*附件[^\n]*复杂多值[^\n]*(上方标签|上下结构)/,
+  'phone guidance must not recommend stacked layout for textareas or multi-values',
 );
 assert.match(
   mobileFormControls,
@@ -292,9 +358,10 @@ assert.match(
 );
 assert.match(
   mobileFormControls,
-  /真实业务页面[\s\S]{0,220}(新建|create)[^\n]*(编辑|edit)[^\n]*(详情|detail)[\s\S]{0,220}(390px|390)[\s\S]{0,160}(767px|767)[\s\S]{0,260}(溢出|overflow|裁切)/i,
+  /真实业务页面[^\n]*新建[^\n]*编辑[^\n]*详情[^\n]*390px[^\n]*767px/,
   'phone task delivery must visually verify create, edit, and detail without clipped overlays',
 );
+assert.match(mobileFormControls, /面板不横向溢出、不被裁切、不被底部操作栏遮挡/);
 assert.match(
   mobileDefaults,
   /存量 App[\s\S]{0,360}(Node|engines)[\s\S]{0,360}(React|react)[\s\S]{0,360}(lockfile|锁文件)/,
@@ -556,12 +623,12 @@ assert.match(
 );
 assert.match(
   readme,
-  /@qfei-design\/make-app-mobile@\^0\.1\.7/,
+  /@qfei-design\/make-app-mobile@\^0\.1\.9/,
   'repository routing docs must expose the same mobile package baseline',
 );
 assert.doesNotMatch(
   `${mobileDefaults}\n${readme}`,
-  /@qfei-design\/make-app-mobile@\^0\.1\.[256]/,
+  /@qfei-design\/make-app-mobile@\^0\.1\.[25678]/,
   'active installation guidance must not retain the old mobile baseline',
 );
 
