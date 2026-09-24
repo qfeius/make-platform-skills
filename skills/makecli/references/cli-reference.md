@@ -358,18 +358,17 @@ Compare local DSL YAML with remote definitions. App inferred from the Make.App m
 ## preflight
 
 ```
-makecli preflight [dir] [--app-type fullstack|service|ui]
+makecli preflight [dir]
 ```
 
-Validates the Make app project layout (default: cwd, type `fullstack`):
+Validates the project against the Make build service spec before pushing (default: cwd). There is no `--app-type` flag; the build mode is auto-detected:
 
-| Type | Required |
-|------|----------|
-| `fullstack` | `apps/dsl/` + `apps/service/package.json` + `apps/ui/package.json` |
-| `service` | `apps/dsl/` + `apps/service/package.json` |
-| `ui` | `apps/dsl/` + `apps/ui/package.json` |
+| Mode | Detected when | Dockerfiles |
+|------|---------------|-------------|
+| A — apps components | `apps/ui/package.json` or `apps/service/package.json` exists | Provided by the platform |
+| B — root Dockerfile | Anything else | The repo brings its own |
 
-Exit 1 on any missing entry — usable as CI/deploy gate.
+The package manager follows the lockfile (`pnpm-lock.yaml` > `yarn.lock` > `package-lock.json`). Findings are ERROR / WARN / INFO, each with a "How to fix" hint. Any ERROR exits 1 — usable as CI/deploy gate; WARN/INFO alone pass.
 
 ---
 

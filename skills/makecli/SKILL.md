@@ -2,7 +2,7 @@
 name: makecli
 description: "Use when the user asks to manage Make platform resources with makecli — create/deploy apps, promote beta to production, check build/deploy progress or app URLs, entities, relations, records, inspect resources, switch backend context, log in to Make, or run makecli CLI commands. Also triggered by requests like \"部署\", \"发布到 production\", \"promote\", \"部署进度\", \"构建状态\", \"apply\", \"查看应用\", \"创建记录\", \"登录 Make\", \"切换环境\", or \"/makecli\". Does not own DSL schema design (use makedsl), frontend UI (makeui), auth (make-app-auth), Service/API code (make-app-service), runtime packaging (make-app-runtime), OCR integration (make-integration), or canvas-table behavior."
 metadata:
-  version: 0.6.0
+  version: 0.6.1
 ---
 
 # makecli — Make Platform CLI
@@ -88,7 +88,7 @@ Key rules:
 ## Workflow: Deploy Code
 
 ```bash
-makecli preflight                      # validate layout (--app-type fullstack|service|ui)
+makecli preflight                      # validate against the build spec (build mode auto-detected)
 git add -A && git commit -m "..."      # deploy pushes committed HEAD; dirty worktree is refused
 makecli app deploy --context <context> --profile <profile> --wait  # push committed HEAD to Beta + block until terminal state
 ```
