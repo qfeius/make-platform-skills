@@ -35,7 +35,7 @@ Codex 判断优先级：
 | Service 接口、`apps/service` API、UI-Service 合同、`apps/docs/api.md`、schema `fields/createFields`、records/users/departments/lookup/file 代理接口、Make Data API adapter、Service 网关 origin 与服务 scope 配置语义 | `make-app-service` | 只负责 Service API、薄编排、Schema 集合无损传输和按主体隔离缓存，不负责 UI、认证、权限算法、打包发布、端口/构建产物、DSL 建模、Make CLI、CanvasTable |
 | 权限、单应用权限、App 权限、`/principal/permission`、`/api/make/app/principal/permission`、菜单权限、对象导航、路由权限、按钮权限、字段可新建、可见、可编辑、`creatable`、`createFields`、read/create/update/delete、URL 防绕过、刷新权限 | `make-app-permission` | Make 项目默认必须接入；负责单个 App 权限链路、Service 调 Make IAM、App scope、`meta.entity.read` 对象导航、`meta.field.read` 表头和 `data.record.read` 数据行的独立权限，以及 `createFields` 与字段 `creatable/readable/editable` 独立权限、创建提交白名单、路由和按钮权限、刷新重取和测试；不负责平台管理权限、认证机制、通用 Service API、UI 布局、CanvasTable 内部、DSL 或部署 |
 | 登录、认证、Token、统一登录、OAuth、Cookie、Session、logout、401/403、current-context 身份、`tenantName`、飞书容器退出可见性、`/api/make/**` 鉴权请求 | `make-app-auth` | 负责认证、身份上下文与宿主环境信号，不负责账户抽屉布局和打包发布 |
-| Trace ID、`traceparent`、`X-Log-Id`、请求关联日志、网络/HTTP 错误卡片、`@qfei-design/make-app-observability` | `make-app-observability` | 所有新建 Make App 默认接入；负责 UI 到 Gateway 的 Trace ID 链路和公共错误展示，不负责认证、Service 路由、AI 协议或 Trace 后端部署 |
+| Trace ID、`traceparent`、`X-Log-Id`、请求关联日志、网络/HTTP/业务错误卡片、`@qfei-design/make-app-observability` | `make-app-observability` | 所有新建 Make App 默认接入；负责 UI 到 Gateway 的 Trace ID 链路和公共错误展示，不负责认证、Service 路由、AI 协议或 Trace 后端部署 |
 | 打包、发布、镜像入口、K8s、Service 启动失败、`apps/ui/dist`、`apps/service/dist/server.js`、Service 端口 `3000`、workspace/package.json、`X-Forwarded-Host` | `make-app-runtime` | 只负责运行态和打包发布契约，不负责 Service API、认证实现或 Make adapter 配置语义 |
 | App/Entity/Relation/Field 建模、DSL YAML、对象、字段、关系、选项 | `makedsl` | 只负责 DSL 设计和生成，不负责远端 apply |
 | `makecli` 命令、diff、apply、部署、查看应用/实体/关系/记录、配置 token/server-url | `makecli` | 只负责 Make CLI 操作，不负责 UI/认证实现 |
@@ -159,7 +159,7 @@ npx skills update makeui
 - 手机业务记录列表无论只读或可写都使用独立卡片 View，不渲染 CanvasTable；可写卡片复用 `make-app-actions` headless core、单条权限、预检和最终写接口合同
 - 手机工具栏默认提供中号搜索；筛选能力已启用或本次明确请求时，才同排显示中号筛选入口。仅搜索若使用 `filter.expression`，复用 `make-app-filter` 编译器，但不读取／回显／写入筛选 Preset，也不挂载高级筛选面板。不展示分组、排序、记录多选或批量操作，也不得直接复用桌面 `listToolbar`/`listContent` 后仅靠 CSS 改样式
 - 手机新建／编辑／详情不仅切换为全屏任务页，还必须使用移动字段适配器：桌面 DatePicker／RangePicker／Select 等弹层不能原样复用；日期时间、候选选择、Lookup、附件、详情值和安全区底部保存栏按 `mobile-form-controls.md` 验收
-- 移动端默认使用头像账户抽屉、最多五项底部导航、独立工作台、全屏任务页，以及 `/fields` 的标准人员／部门与附件字段组件；底层搜索抽屉只用于特殊定制
+- 移动端默认使用头像账户抽屉、最多五项底部导航、全屏任务页，以及 `/fields` 的标准人员／部门与附件字段组件；当前可展示业务对象达到 5 个时，底部导航才显示工作台 Tab，工作台直达路由始终保留；底层搜索抽屉只用于特殊定制
 - 人员/部门多选中的勾选、删除标签和清除只更新 `MobileIdentityField` 当前打开周期的临时草稿；关闭放弃草稿，只有“确定”提交真实表单值。只有特殊字段直接使用底层 Sheet 时，宿主才自行持有这份草稿
 - 手机人员/部门单选默认使用 `MobileIdentityField` 和 `selectionMode="single"`，不显示“确定”；选择、移除和清除由字段组件通过一次 `onChange` 提交并关闭。只有直接使用底层 `MobileSearchPickerSheet` 的特殊组合，宿主才处理 `onConfirm` 快照，不得两层重复写表单。升级移动包后重启 Vite 并传入 `--force`，重新加载真实页面验证单选、多选和桌面回归
 - 设计 App Shell、侧边栏、顶部栏、列表页、创建/编辑/详情抽屉
