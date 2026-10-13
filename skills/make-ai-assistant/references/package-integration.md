@@ -2,6 +2,13 @@
 
 ## Resolve the consumer contract
 
+First follow `app-agent-initialization.md`. Read the installed package's
+`package.ai.json` and every file in `readOrder`, then its Make App recipe,
+capabilities, public export map and declarations. Match them against the target
+backend before choosing a transport. The v1 requirements below apply only when
+both sides support that older contract; a newer package version alone does not
+prove support for the current resource API.
+
 For a new integration or a requested latest upgrade, query the configured npm
 registry, install its latest published `@qfei-design/make-ai-assistant` in the
 consumer UI workspace, and verify the lockfile's exact resolved version. Do not
@@ -12,8 +19,10 @@ must fail this Skill's current audit; do not weaken the audit or add a host-side
 compatibility shim to accept it. Use `0.3.2` or a later published version only
 if its public declarations satisfy the current contract and the v1
 route/response tests pass. If registry access, peer
-compatibility or the required public contract cannot be confirmed, stop and
-report the exact gap instead of guessing an old adapter.
+compatibility or the required public contract cannot be confirmed, pause the
+transport-dependent branch and report the exact gap. Continue the independent
+frontend and unconfigured state in `app-agent-initialization.md`; do not guess
+an old adapter or stop the whole App task.
 
 Read the installed `package.json` export map, each exported type target, and only
 the transitively referenced declarations needed to understand those public
@@ -38,8 +47,8 @@ these public fields, report the package release dependency and pause full v1
 integration; a host-side duplicate parser or fixed upload limits is not a
 compatible substitute.
 
-The Skill's versioned references define the selected backend protocol. Package
-README/recipe/example text and another App are not substitutes for that protocol.
+The target backend's canonical API defines its protocol. This Skill's pinned v1
+references and package README/recipe/example text cannot override that protocol.
 If the installed public types or exports are incompatible, report “当前包版本缺少所需公开契约”
 with the version and missing symbol. Do not reconstruct internals or silently
 enable a legacy route. A dedicated legacy adapter is not bundled here.

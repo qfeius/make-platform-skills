@@ -43,7 +43,7 @@ assert.doesNotMatch(service, /Make Console|make-console|console\/v1/i);
 assert.doesNotMatch(readme.match(/### make-ai-assistant[\s\S]*?(?=\n### |$)/)?.[0] ?? '', /Make Console|make-console|console\/v1/i);
 assert.doesNotMatch(readme, /按协议族选 adapter|协议族选择/);
 
-assert.match(frontmatter, /version:\s*0\.3\.1/);
+assert.match(frontmatter, /version:\s*0\.3\.2/);
 assert.match(frontmatter, /Make App[\s\S]*Agent discovery/i);
 assert.doesNotMatch(bundle, /\b[A-Za-z][A-Za-z0-9]*(?:Poc|Workbench)\b|\/(?:Users|home|var\/folders)(?:\/|$)/i);
 assert.doesNotMatch(bundle, /Expense|报销|销售订单|项目进度|PRJ\d+|session_01/i);
@@ -54,8 +54,8 @@ assert.match(docs.skill, /TDD[\s\S]*failing[\s\S]*implementation/i);
 assert.match(docs.skill, /audit-make-ai-assistant-project\.mjs/);
 assert.match(docs.skill, /makeui[\s\S]*make-app-service[\s\S]*make-app-auth[\s\S]*make-app-permission[\s\S]*make-app-runtime/);
 
-assert.match(docs.skill, /versioned Make App AI Chat contract/i);
-assert.match(docs.skill, /current backend[\s\S]*production readiness/i);
+assert.match(docs.skill, /bundled Make App v1 references[\s\S]*only when the target backend/i);
+assert.match(docs.skill, /current backend[\s\S]*independent frontend work/i);
 assert.match(docs.package, /legacy route/i);
 assert.match(docs.package, /@qfei-design\/make-ai-assistant\/client/);
 assert.match(docs.package, /public types or exports|export map and the declarations/i);

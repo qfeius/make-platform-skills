@@ -2,7 +2,7 @@
 name: make-ai-assistant
 description: "Use when integrating, upgrading, debugging, or reviewing @qfei-design/make-ai-assistant in a Make App: Agent discovery, multi-session chat, streaming, file/image input, Service gateway routes, and package-owned UI. Does not own generic dialogs, model behavior, authentication or permission policy, DSL, or publishing."
 metadata:
-  version: 0.3.1
+  version: 0.3.2
 ---
 
 # Make AI Assistant
@@ -11,29 +11,34 @@ This Skill owns the host integration contract, not the package's internal UI or
 state machine. The Make App host owns identity, bounded page context, one
 authenticated raw-byte transport, explicit Service routes, and deployment
 configuration.
-This Skill's Make App v1 reference is aligned with the Agent Public API v1
-OpenAPI revision `60bbbcfe90c6defce46a0ed715e008fa4db20deb` and the
-package's public v1 entry points. The Skill version and npm package version
-are independent; verify the actual installed version before implementation.
+Read `references/app-agent-initialization.md` first for customer App work.
+Agent initialization is optional and owned by the development Agent's Skill
+workflow, independent of Console and Build/deployment-success callbacks.
+The bundled Make App v1 references describe the older OpenAPI revision
+`60bbbcfe90c6defce46a0ed715e008fa4db20deb`. Use them only when the target backend
+and installed package are both verified to support that contract; they do not
+override the current backend API. Skill and npm versions are independent.
 
 ## Workflow
 
 1. Inspect the target host's package manager, authenticated shell and identity,
    shared auth adapter, UI/Service routes, permission checks, runtime origin,
    tests, and existing assistant integration. Preserve stable call chains.
-2. Read `references/package-integration.md`. For a new installation or a requested
+2. Check actual CLI configuration capabilities through `makecli` and read
+   `references/package-integration.md`. For a new installation or a requested
    latest upgrade, query the configured registry, install the latest published
    package in the consumer UI workspace, and verify its exact lockfile version,
-   public export map and declarations. If the installed version does not expose
-   this Skill's required public contract, stop with the missing export/type and
-   version; do not synthesize compatibility from another project or package prose.
-3. Use the versioned Make App AI Chat contract in
-   `references/make-app-protocol.md`, including schemas, limits, extensible
-   public errors and the pinned backend revision. Check the current backend
-   contract/deployed behavior before claiming production readiness. If that
-   check is unavailable or differs, retain the documented v1 implementation
-   but report runtime compatibility as unverified; never infer an older API
-   from another project.
+   public export map and declarations. Read `package.ai.json` and all files in
+   its `readOrder`, plus the selected Make App recipe/capability. If the public
+   package and current backend differ, report the exact gap and continue only
+   independent frontend work; do not synthesize a compatibility layer.
+3. Select a Make App adapter only after matching its public types and routes to
+   the target backend's canonical contract. A configured Console Agent does not
+   select a Console adapter for a customer App. The remaining v1-specific steps,
+   references and audit apply only to a verified v1 backend. If that check fails
+   or is unavailable, keep real sending disabled and continue the shell,
+   authentication boundary and explicit retryable configuration state described
+   in `references/app-agent-initialization.md`.
 4. For a full integration, read the package, host, protocol, stream/attachment,
    UI, and test references below. For a targeted fix, read only the relevant
    references. Use TDD: failing contract/behavior test, minimal implementation,
@@ -56,7 +61,7 @@ are independent; verify the actual installed version before implementation.
    authenticated existing-route smoke test. A static preflight pass cannot
    prove all 18 Service operations, runtime correctness or deployment readiness.
 
-For a Skill contract release, complete the independent forward test in
+For a Skill workflow release, complete the independent forward test in
 `references/testing-and-pitfalls.md` before declaring this guidance ready.
 
 ```bash
@@ -64,6 +69,8 @@ node skills/make-ai-assistant/scripts/audit-make-ai-assistant-project.mjs <proje
   --expected-package-version=<resolved-exact-version>
 ```
 
+Run this audit only for the verified v1 integration it covers. It does not
+validate the current resource protocol or turn a blocked integration into a pass.
 The expected version is the actual installed resolution, not a range. A claim
 of broader model-input support needs separate deployed-model evidence. Verify
 published same-origin requests and response streaming against the target Dev App
@@ -73,6 +80,7 @@ before reporting an integration complete.
 
 | Topic | Read |
 | --- | --- |
+| Optional Agent initialization, CLI capability and backend/package gaps | `references/app-agent-initialization.md` |
 | Package resolution, public types and React props | `references/package-integration.md` |
 | Make App host composition, Agent discovery and identity | `references/make-app-host-integration.md` |
 | Make App v1 18-operation API and Service boundary | `references/make-app-protocol.md` |
@@ -81,6 +89,11 @@ before reporting an integration complete.
 | Tests and delivery gates | `references/testing-and-pitfalls.md` |
 
 ## Hard boundaries and handoffs
+
+The route, `agentId` and `app_internal` rules below are conditional v1 rules.
+Do not apply them to a current resource API that does not declare those fields.
+Missing CLI or package capabilities pause only dependent work, not the whole
+frontend task. Mock previews must be opt-in and visibly separate from real chat.
 
 - Browser Make App requests use same-origin `/api/make/app/ai/v1/**`. The SDK
   appends `/v1` to its path-free version base; do not append it twice. Local

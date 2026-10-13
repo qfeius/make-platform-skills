@@ -1,5 +1,23 @@
 # Testing and delivery gates
 
+## Capability and initialization workflow
+
+Use `app-agent-initialization.md` before the conditional v1 matrix below. Test
+ordinary Apps without an AI requirement, missing public CLI commands, available
+documented commands, and package/backend protocol mismatch. Observe generated
+actions and artifacts: no invented CLI, no Console initialization or adapter
+fallback, no old v1 routes for the current resource API, independent frontend
+work continues and completion claims reflect the real boundary.
+
+For an initialization-only Skill change, give an independent fresh agent the
+updated Skills, raw CLI help, current backend contract and published package
+documents plus an isolated host shell. Ask it to implement a realistic App
+assistant request without revealing the expected outcome. Check its actions,
+UI state, public imports and build. This verifies the selected capability branch;
+it does not claim full chat, stream or upload coverage when dependencies are absent.
+The full v1 protocol-release exercise below remains required for a release that
+changes that supported protocol or implements a complete v1 integration.
+
 ## TDD and public-contract checks
 
 Test first: demonstrate a failing behavior/contract, make the minimal fix,
@@ -51,8 +69,9 @@ remain required.
 
 ## Platform Skill release forward test
 
-Before releasing a changed protocol, host integration workflow, or ownership
-boundary, run an independent fresh-agent forward test. Prepare an isolated
+For changes to the supported v1 protocol or complete v1 host integration,
+beyond the initialization-only workflow above, run an
+independent fresh-agent forward test before release. Prepare an isolated
 temporary Make App workspace with an authenticated shell, shared auth adapter,
 empty assistant placement, Service skeleton, installed public package, and a
 v1 Gateway fixture derived from the current backend OpenAPI, not from this
@@ -88,6 +107,11 @@ than claiming the Skill is release-ready. Ordinary host fixes do not require
 this platform-release exercise unless they change the Skill's contract.
 
 ## Completion and failure reporting
+
+The following full chat and upload checks apply to a supported v1 integration.
+For initialization-only or unavailable capabilities, use the separate App,
+Agent and assistant results in `app-agent-initialization.md` and the workflow
+checks above; do not demand an unsupported v1 integration to finish independent work.
 
 Run the Skill's audit, relevant host tests, Service tests, typecheck, build and
 an existing-route render smoke test. Then verify authenticated published Dev

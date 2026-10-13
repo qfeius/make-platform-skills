@@ -1,4 +1,4 @@
 interface:
   display_name: "Make AI Assistant"
   short_description: "Make App AI chat, multi-session, file, and SSE integration"
-  default_prompt: "Use $make-ai-assistant to integrate the Agent chat in a Make App using public package APIs, paginated Agent discovery, multi-session chat, file/image upload, SSE recovery, versioned Service routes, package-owned UI, and tests."
+  default_prompt: "Use $make-ai-assistant to add an optional App Agent and assistant. Check real makecli capabilities and match the published package to the target backend before real chat integration. Use public package APIs and package-owned UI, validating supported multi-session chat and SSE behavior. Continue independent frontend work when configuration or transport is unavailable, and report deployment, Agent configuration, and live verification separately."

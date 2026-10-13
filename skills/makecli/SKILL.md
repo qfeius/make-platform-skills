@@ -2,13 +2,17 @@
 name: makecli
 description: "Use when the user asks to manage Make platform resources with makecli — create/deploy apps, promote beta to production, check build/deploy progress or app URLs, entities, relations, records, inspect resources, switch backend context, log in to Make, or run makecli CLI commands. Also triggered by requests like \"部署\", \"发布到 production\", \"promote\", \"部署进度\", \"构建状态\", \"apply\", \"查看应用\", \"创建记录\", \"登录 Make\", \"切换环境\", or \"/makecli\". Does not own DSL schema design (use makedsl), frontend UI (makeui), auth (make-app-auth), Service/API code (make-app-service), runtime packaging (make-app-runtime), OCR integration (make-integration), or canvas-table behavior."
 metadata:
-  version: 0.6.1
+  version: 0.6.2
 ---
 
 # makecli — Make Platform CLI
 
 makecli is the CLI for the Make agentic development platform.
 It manages Apps, Entities, Relations, Records, and code deployment.
+
+When a customer App needs an AI assistant, use the optional initialization
+workflow below together with `make-ai-assistant`. App creation and successful
+Build/deployment do not by themselves require or create an Agent.
 
 ## Installation
 
@@ -20,7 +24,8 @@ makecli update          # self-update + sync Make platform skills
 
 ## Pre-flight Check
 
-Before executing ANY makecli command, verify the environment:
+Before authenticated or remote makecli operations, verify the environment.
+Local `version` and `--help` capability checks do not require login:
 
 0. Check `makecli` is installed — missing: run the installation above
 1. Run `makecli configure verify --output=json` to check token status
@@ -62,12 +67,45 @@ User request arrives
     |
     +- App overview + environment URLs? --> app info <appKey>
     |
+    +- Customer App needs an AI assistant? --> Optional App Agent initialization
+    |
     +- Data CRUD? --> record commands
     |
     +- Delete resource / one-off operation? --> Imperative Workflow
     |
     +- Query / inspect? --> list/get/schema commands
 ```
+
+## Optional App Agent initialization
+
+Only enter this workflow when the user's requirements include an App Agent or
+AI assistant. The development Agent owns this work through Skills; do not move
+it into a Console initialization call or a Build/deployment-success callback.
+
+1. Inspect `makecli version`, `makecli --help`, and `makecli app --help`, then
+   the help for any advertised public configuration command. Do not invent
+   `app agent` commands or flags. A hidden `makecli agent` command is the local
+   Code Agent, not customer App Agent configuration.
+2. Keep backend **context** separate from App **environment**. Read the actual
+   target App identity through the available App inspection commands; do not
+   guess a Beta suffix or copy configuration from another environment.
+3. If public Agent configuration is supported, follow that command's real help
+   and current user authorization to inspect the plugin/model/Runtime catalogs,
+   then create or update the intended Agent. Derive names and choices from the
+   requirements and authorized catalogs; read back an unknown write result
+   before retrying. Do not automatically enable an incomplete configuration.
+4. If those commands are absent, report the CLI version and missing capability.
+   Continue the independent frontend, authenticated Service boundary and clear
+   unconfigured/error states using `make-ai-assistant`. Do not use hidden Code
+   Agent commands, Console initialization, raw HTTP as a CLI substitute, or
+   lifecycle service credentials. This Skill change does not implement the CLI.
+5. Report App build/deployment, Agent configuration and real assistant
+   verification separately. Successful Build/deployment is not proof that an
+   Agent exists or that real chat works.
+
+Current capability observations and the frontend package/backend check belong
+to `make-ai-assistant`'s `references/app-agent-initialization.md`. Never print
+tokens, credential files or sensitive `--debug` request/response output.
 
 ## Workflow: Declarative Schema (Primary)
 
