@@ -4,10 +4,14 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const adapterPath = process.argv[2];
+const [adapterPath, ...flags] = process.argv.slice(2);
+const capabilityFlags = new Map([
+  ['--require-field-metadata', 'canReadEntityFieldMetadata'],
+  ['--require-bulk-update', 'canBulkUpdateEntityField'],
+]);
 
-if (!adapterPath) {
-  console.error('Usage: node permission-conformance-suite.mjs <adapter-module>');
+if (!adapterPath || flags.some((flag) => !capabilityFlags.has(flag))) {
+  console.error('Usage: node permission-conformance-suite.mjs <adapter-module> [--require-field-metadata] [--require-bulk-update]');
   process.exit(2);
 }
 
@@ -24,17 +28,23 @@ const requiredFunctions = [
   'normalizeAccess',
   'canUseEntityOperation',
   'canCreateEntityField',
-  'canReadEntityFieldMetadata',
   'canReadEntityField',
   'canUpdateEntityField',
-  'canBulkUpdateEntityField',
   'isCreateCapableField',
   'isEditCapableField',
+  ...flags.map((flag) => capabilityFlags.get(flag)),
 ];
 
 for (const functionName of requiredFunctions) {
   if (typeof adapter[functionName] !== 'function') {
     console.error(`adapter_function_missing: ${functionName}`);
+    process.exit(1);
+  }
+}
+
+for (const functionName of capabilityFlags.values()) {
+  if (adapter[functionName] !== undefined && typeof adapter[functionName] !== 'function') {
+    console.error(`adapter_function_invalid: ${functionName}`);
     process.exit(1);
   }
 }
@@ -88,17 +98,17 @@ const cases = [
     for (const entityKey of [undefined, null, 7, {}, [], '', '   ', '*']) {
       assert.equal(adapter.canUseEntityOperation(current, entityKey, 'data.record.read'), false);
       assert.equal(adapter.canCreateEntityField(current, entityKey, 'title'), false);
-      assert.equal(adapter.canReadEntityFieldMetadata(current, entityKey, 'title'), false);
+      if (adapter.canReadEntityFieldMetadata) assert.equal(adapter.canReadEntityFieldMetadata(current, entityKey, 'title'), false);
       assert.equal(adapter.canReadEntityField(current, entityKey, 'title'), false);
       assert.equal(adapter.canUpdateEntityField(current, entityKey, 'title'), false);
-      assert.equal(adapter.canBulkUpdateEntityField(current, entityKey, 'title'), false);
+      if (adapter.canBulkUpdateEntityField) assert.equal(adapter.canBulkUpdateEntityField(current, entityKey, 'title'), false);
     }
     for (const fieldKey of [undefined, null, 7, {}, [], '', '   ', '*']) {
       assert.equal(adapter.canCreateEntityField(current, 'order', fieldKey), false);
-      assert.equal(adapter.canReadEntityFieldMetadata(current, 'order', fieldKey), false);
+      if (adapter.canReadEntityFieldMetadata) assert.equal(adapter.canReadEntityFieldMetadata(current, 'order', fieldKey), false);
       assert.equal(adapter.canReadEntityField(current, 'order', fieldKey), false);
       assert.equal(adapter.canUpdateEntityField(current, 'order', fieldKey), false);
-      assert.equal(adapter.canBulkUpdateEntityField(current, 'order', fieldKey), false);
+      if (adapter.canBulkUpdateEntityField) assert.equal(adapter.canBulkUpdateEntityField(current, 'order', fieldKey), false);
     }
   }],
   ['operation_create_absent_must_deny', () => {
@@ -605,7 +615,18 @@ const cases = [
   }],
 ];
 
+const extensionCases = new Map([
+  ['field_metadata_read_is_independent_from_business_values', 'canReadEntityFieldMetadata'],
+  ['bulk_update_field_access_is_independent_from_single_update', 'canBulkUpdateEntityField'],
+]);
+let skipped = 0;
 for (const [name, run] of cases) {
+  const extension = extensionCases.get(name);
+  if (extension && typeof adapter[extension] !== 'function') {
+    console.log(`${name}: SKIP (adapter extension not provided: ${extension})`);
+    skipped += 1;
+    continue;
+  }
   try {
     run();
   } catch (error) {
@@ -615,4 +636,5 @@ for (const [name, run] of cases) {
   }
 }
 
-console.log(`permission conformance: PASS (${cases.length} cases)`);
+const coverage = `${cases.length - skipped} cases${skipped ? `, ${skipped} skipped` : ''}`;
+console.log(`permission conformance: PASS (${coverage})`);

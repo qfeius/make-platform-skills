@@ -93,13 +93,22 @@ Static source signals cannot prove that permission helpers deny missing access. 
 normalizeAccess
 canUseEntityOperation
 canCreateEntityField
-canReadEntityFieldMetadata
 canReadEntityField
 canUpdateEntityField
-canBulkUpdateEntityField
 isCreateCapableField
 isEditCapableField
 ```
+
+The seven core exports above remain the required adapter shape. The adapter may additionally export `canReadEntityFieldMetadata` and `canBulkUpdateEntityField` as thin wrappers around existing production selectors or operation-aware field helpers; these names do not require new production exports. When present, the suite tests each extension. When absent, it reports the corresponding cases as `SKIP` and excludes them from the passed count. Missing extensions never weaken the core create/read/update checks or allow metadata permissions to authorize business values.
+
+For a host that exposes batch editing, its CI/publish gate must require the batch extension. For metadata-header verification, require the metadata extension:
+
+```bash
+node skills/make-app-permission/scripts/permission-conformance-suite.mjs <adapter-module> \
+  --require-field-metadata --require-bulk-update
+```
+
+Each flag fails if its adapter extension is missing. A host without batch editing need not provide a batch-field helper. Validate metadata headers through the host's existing field selector; do not add a production helper solely to meet an adapter name.
 
 `isEditCapableField` is the production host-capability guard used before edit rendering, cell-editor attachment, and update payload construction. It must reject both ID types without excluding audit keys by name.
 
@@ -109,7 +118,9 @@ Run:
 node skills/make-app-permission/scripts/permission-conformance-suite.mjs <adapter-module>
 ```
 
-For TypeScript adapters, invoke the command with the project's existing TypeScript runner. The adapter must delegate to production code rather than duplicate permission logic. The suite proves missing operation denial, named-entity isolation, deterministic pre-validation row selection, rejection of non-string/blank/wildcard requested identifiers, the fixed `* < App < entity/* < entity/exact` resource order, malformed permission-envelope and explicit App-resource rejection, valid state-list preservation, deny-wins, independent metadata/create/read/update/bulkUpdate fields, permissionKey-specific access values, wildcard exceptions, and the canonical create/edit system-field exclusions.
+For TypeScript adapters, invoke the command with the project's existing TypeScript runner. The adapter must delegate to production code rather than duplicate permission logic. For the exported/required capabilities, the suite proves missing operation denial, named-entity isolation, deterministic pre-validation row selection, rejection of non-string/blank/wildcard requested identifiers, the fixed `* < App < entity/* < entity/exact` resource order, malformed permission-envelope and explicit App-resource rejection, valid state-list preservation, deny-wins, independent metadata/create/read/update/bulkUpdate fields, permissionKey-specific access values, wildcard exceptions, and the canonical create/edit system-field exclusions.
+
+The bundled test adapter and mutation tests validate the checker, not a business App. Report their results separately from an actual host-adapter run and from backend/browser acceptance. If a real host adapter has not been exercised, state that limitation. Cross-check backend permission definitions and create/update field-state behavior before treating these examples as a platform contract; do not infer semantics from permission-key names alone.
 
 ## Host gate integration
 

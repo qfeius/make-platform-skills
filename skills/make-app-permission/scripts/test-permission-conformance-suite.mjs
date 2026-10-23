@@ -174,6 +174,45 @@ try {
   assert.equal(correctResult.status, 0, correctResult.output);
   assert.match(correctResult.output, /permission conformance: PASS/);
 
+  const coreAdapterSource = correctAdapterSource
+    .replace(/^    export const canReadEntityFieldMetadata[^\n]*\n/m, '')
+    .replace(/^    export const canBulkUpdateEntityField[^\n]*\n/m, '');
+  const coreAdapter = writeAdapter('core-only.mjs', coreAdapterSource);
+  const coreResult = runSuite(coreAdapter);
+  assert.equal(coreResult.status, 0, coreResult.output);
+  assert.match(coreResult.output, /permission conformance: PASS \(47 cases, 2 skipped\)/);
+  assert.match(coreResult.output, /field_metadata_read_is_independent_from_business_values: SKIP/);
+  assert.match(coreResult.output, /bulk_update_field_access_is_independent_from_single_update: SKIP/);
+
+  for (const [flag, helper] of [
+    ['--require-field-metadata', 'canReadEntityFieldMetadata'],
+    ['--require-bulk-update', 'canBulkUpdateEntityField'],
+  ]) {
+    const missingCapability = runSuite(coreAdapter, [flag]);
+    assert.notEqual(missingCapability.status, 0);
+    assert.match(missingCapability.output, new RegExp(`adapter_function_missing: ${helper}`));
+    const supportedCapability = runSuite(correctAdapter, [flag]);
+    assert.equal(supportedCapability.status, 0, supportedCapability.output);
+    const malformedAdapter = writeAdapter(`invalid-${helper}.mjs`,
+      `${coreAdapterSource}\nexport const ${helper} = true;`);
+    const malformedCapability = runSuite(malformedAdapter);
+    assert.notEqual(malformedCapability.status, 0);
+    assert.match(malformedCapability.output, new RegExp(`adapter_function_invalid: ${helper}`));
+  }
+
+  const unknownCapabilityFlag = runSuite(coreAdapter, ['--require-bulk-updat']);
+  assert.equal(unknownCapabilityFlag.status, 2);
+  assert.match(unknownCapabilityFlag.output, /Usage:/);
+
+  const coreUsesMetadataAdapter = writeAdapter('core-uses-metadata.mjs',
+    coreAdapterSource.replace(
+      "'data.record.create', new Set(['*', 'creatable'])",
+      "'meta.field.read', new Set(['*', 'creatable'])",
+    ));
+  const coreUsesMetadataResult = runSuite(coreUsesMetadataAdapter);
+  assert.notEqual(coreUsesMetadataResult.status, 0);
+  assert.match(coreUsesMetadataResult.output, /record_create_deny_also_denies_create_field/);
+
   const unknownKeySelectedAdapter = writeAdapter(
     'unknown-key-selected.mjs',
     correctAdapterSource.replace(
@@ -393,8 +432,8 @@ function writeAdapter(name, source) {
   return file;
 }
 
-function runSuite(adapterPath) {
-  const result = spawnSync(process.execPath, [suiteScript, adapterPath], {
+function runSuite(adapterPath, flags = []) {
+  const result = spawnSync(process.execPath, [suiteScript, adapterPath, ...flags], {
     encoding: 'utf8',
   });
   return {

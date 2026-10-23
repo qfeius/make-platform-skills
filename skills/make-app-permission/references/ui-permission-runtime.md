@@ -43,18 +43,19 @@ Normalize each entity's permission-trimmed Schema collections independently:
 
 Normalize to `{ principal, scope, appResource, permissions }`, deriving `appResource` only from the validated response `scope` rather than trusting an independently supplied value. Before normalizing `permissionKey`, `resource`, `effect`, and `fieldAccess`, apply the deterministic selection table in `permission-boundaries.md`. Ignore only clearly unrelated rows; selected and unclassifiable rows are strict-validation inputs and therefore fail closed when malformed. Ignored rows must never grant or deny App access or block the permission-to-Schema loading flow.
 
-Provide pure helpers:
+Provide pure permission behavior through helpers or equivalent existing selectors; the names below describe behavior, not mandatory new production exports:
 
 - `canUseEntityOperation(access, entityKey, permissionKey)`
 - `canCreateEntityField(access, entityKey, fieldKey)`
-- `canReadEntityFieldMetadata(access, entityKey, fieldKey)` — `meta.field.read` for field definitions/table headers
 - `canReadEntityField(access, entityKey, fieldKey)` — `data.record.read` for business values
 - `canUpdateEntityField(access, entityKey, fieldKey)`
-- `canBulkUpdateEntityField(access, entityKey, fieldKey)` — independent `data.record.bulkUpdate` field authorization
 - `creatableFieldKeysForEntity(access, entityKey, createFields)`
 - `visibleFieldsForEntity(access, entityKey, fields)` — metadata-visible headers
 - `recordReadableFieldsForEntity(access, entityKey, visibleFields)` — business values
 - `editableFieldKeysForEntity(access, entityKey, visibleFields)`
+
+- Field metadata visibility (`meta.field.read`): use the existing visible-field selector; the conformance adapter may expose it as `canReadEntityFieldMetadata(access, entityKey, fieldKey)`.
+- When batch editing is supported, evaluate independent `data.record.bulkUpdate` field authorization through the existing operation-aware helper; the conformance adapter may expose it as `canBulkUpdateEntityField(access, entityKey, fieldKey)`.
 
 Support exact and wildcard permission keys/resources, IAM namespace-wildcard App resources, most-specific allow ranges, same-specificity allow unions, named-over-wildcard field entries, and deny-wins behavior.
 
