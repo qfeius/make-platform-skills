@@ -1,93 +1,19 @@
 # Testing and audit
 
-本文件普通新建用例保留仓库已有 legacy `createFields` / `meta.field.read` 字段选择合同，不能用本轮编辑修正迁移新建维度或收紧状态。版本依据及 raw principal / v3 Decision 边界见 [design and protocol profiles](design-and-protocol-profiles.md)。有效审批新建按 [make-app-approval](../../make-app-approval/SKILL.md) 单独增加 UI/Service 启动字段一致性测试：普通集合没有但启动配置授权的字段仍应显示并保存。不得将普通场景的“字段不在 createFields 就不能创建”当成审批分支断言，也不得删除原普通权限回归来通过审批测试。应用、对象、操作资格和关联目标权限仍需共同覆盖。
+Verify the [permission boundaries](permission-boundaries.md), UI lifecycle and Service transport with production selectors and host tests. Tests must precede implementation. Do not satisfy permission tests by changing roles, adding administrator grants or inventing field-update permissions.
 
-审批测试还应覆盖普通 `createFields` 缺少但启动配置允许的 Lookup/File：Service 对源字段使用最新启动配置，Lookup 目标仍须可见且存在，File 只在已确认预上传合同下提交；审计普通字段交集时不得把这一审批分支判为缺失 `createFields` 的违规创建。
-
-Use this reference before implementation and before reporting permission work complete.
-
-## Service and Schema tests
-
-- Principal permission route, App scope, IAM `/api/make/iam/**`, target header, login forwarding, tenant resolution, errors, and runtime-mode scopes.
-- Principal permission route preserves every completed IAM response's HTTP status, Content-Type, and body unchanged, including 2xx success plus 4xx/5xx errors; only a no-response transport failure may use a documented Service-generated error.
-- Preserve and normalize `fields` and `createFields` independently across Service, shared types, and UI adapters.
-- Missing/null/invalid `createFields` becomes empty and never falls back to `fields`.
-- Presence of `editableFields` does not change edit behavior.
-- Permission-trimmed Schema cache/in-flight work is isolated by principal, tenant, App, and access generation.
-- Permission refresh invalidates or reloads Schema before protected page data.
-- Lookup source resolution uses visible `fields`, then `createFields`; target display fields remain visible-only.
-
-## Permission model tests
-
-Cover exact/wildcard/parent/App/entity resources, IAM namespace wildcard, canonical/namespace-alias equal specificity, legacy-create most-specific allow/union/named-field behavior, and deny-wins operation gates. Existing-record fields instead preserve all applicable restrictions across metadata-read and record read/write rows, including broader baselines and mixed arrays. Prove that a named entity grant does not leak to another entity. Exercise every row-selection-table outcome: malformed tenant-root and other-App rows remain ignored; a malformed unknown current-App key such as `data.record.export` remains ignored; a malformed supported current-App key fails closed; and an unclassifiable resource fails closed even when its key is unrelated. Add adversarial rows for invalid effects, non-three-part permission keys, missing/non-App scope, an independently supplied App resource that conflicts with scope, arbitrary namespace, wildcard tenant/App resources, explicit `null` fieldAccess, invalid containers, blank field keys, empty state lists, unknown states, and mixed non-string state lists. A malformed selected current-App row poisons the whole access snapshot; do not discard it while preserving sibling allows. Null/primitive payloads or rows and non-array `permissions` must return a denied snapshot without throwing.
-
-Also prove that `meta.entity.read` is independent from `data.record.read`: an entity can be navigation/route-authorized while its record operation is denied, and a record permission alone cannot add an entity to navigation.
-
-Required field cases:
-
-| Case | Expected |
-| --- | --- |
-| Legacy `meta.field.read` create-state set | historical creatable/readonly/editable/mask/`*` selects only eligible `createFields`; independent create gate still required |
-| `data.record.create` with no legacy field authorization | operation allowed; does not invent create fields |
-| Legacy `creatable` only | create-only; no existing-record read/write grant |
-| Record update allowed, visible Schema field, no effective restriction | editable without meta.field.update or data.field.update |
-| Only metadata-write permissions | never grants record update/bulkUpdate |
-| Update absent/denied; bulkUpdate allowed | bulk gate remains independent; shared field restrictions still apply |
-| BulkUpdate absent/denied; update allowed | single gate remains independent |
-| Metadata-read readonly + update editable | whole attempted field write denied |
-| Record-read mask/readonly + update editable | write denied, masked display preserved |
-| Raw array editable/`*` + readonly/hidden/mask | restrictive state denies writing |
-| Raw named editable + same-row or other-row restrictive baseline, no Statement provenance | restriction retained; no widening |
-| Confirmed Statement group named editable over own readonly baseline | within-Statement override; another Statement's hidden still wins |
-| More-specific editable row + broader applicable restriction | restriction retained for existing-record writes |
-| Empty/omitted raw field restriction | no added restriction; never overrides another row or supplies missing operation |
-| v3 final Decision map | already resolved; not reinterpreted as raw rows; five-state strictness, no creatable |
-| Malformed selected fieldAccess / envelope | entire snapshot fails closed, without throwing |
-| Scalar and array states | preserved; legacy-create and existing-record evaluation stay profile-specific |
-
-## Page and payload tests
-
-- An entity with `meta.entity.read` and readable `meta.field.read` fields but without `data.record.read` appears in left navigation and renders its authorized table headers, with no rows and no records/detail/pagination request.
-- A missing `meta.entity.read` hides the navigation item and blocks the dynamic object route even if `data.record.read` or `meta.field.read` is present.
-- A `data.record.read` revoke removes cached rows by supplying an empty table row source, and stops record-backed controls, but retains an entity-authorized table shell and `meta.field.read` headers. Prove that disabling only the records query cannot leave previously loaded rows visible.
-- A metadata-visible header remains visible while its denied business value is omitted/empty; no cached value, filter, Lookup label, or edit form can bypass the restrictions in the `fieldAccess` property of the matched `data.record.read` permission result.
-- A create-only invisible field renders and submits in create mode only.
-- A field outside `createFields`, or a `hidden` field in matched legacy `meta.field.read`, is absent from create.
-- Create operation with zero fields keeps the entry, shows “暂无可新建字段”, and prevents unsupported empty submission.
-- Create entry/handler depends only on current `data.record.create`; create fields retain current `createFields` intersected with the historical fields allowed by legacy `meta.field.read` results.
-- Edit fields must be metadata-visible and business-readable, then allowed by the requested record operation and effective state after conservative metadata-read/record read-write restriction merging; `editableFields` is ignored.
-- ID/audit fields are absent from create; ID fields are also absent from edit forms, cell editors, and update payloads; audit fields remain editable when visible/update-authorized.
-- Persisted-record-only `Make.Field.File` is absent from create render/required/payload; an explicitly implemented pre-upload/direct-create contract may include only its backend-approved attachment array without a `recordID`. Read/edit behavior stays independent and follows visible fields, update permission, and the host edit capability.
-- `Make.Field.Lookup` candidate requests use the dedicated option route without exposing invisible target fields. Create sends `{ data, relations }` and Service validates `relations` before synthesizing `qfei_relation`; edit sends authorized `values` to the snapshot-preserving `lookup-relations` route. Neither path accepts a client-supplied partial raw `qfei_relation` or a Lookup key hidden in ordinary `data`.
-- `field.validations.isRequired` and type validation apply only to rendered authorized fields; `required` is a derived UI-control prop, not an alternate Schema metadata key.
-- Submit recomputes current authorization; attempted existing-record restricted/stale/unauthorized fields reject the entire mutation in UI and Service, retain the draft and selection, and never silently remove changes into a success. Permission restoration must not replay the draft without an explicit user submit.
-- Permission or Schema failure fails closed.
-- Permission and permission-aware Schema request failures, including permission 首次加载失败, keep safe `kind/status/title/description/traceId` in Provider state and render the shared error card with a visible valid Trace ID when one exists; the failed load never exposes protected data. Follow `make-app-observability` for the real AppShell visibility test.
-
-## Refresh tests
-
-- Refresh order is permission, Schema invalidation/reload, surface recomputation, then data if read remains allowed.
-- New permission is not published before its Schema succeeds; refresh failure does not restore the old authorization generation.
-- New create/read fields appear after page refresh without browser reload.
-- Revoked create/update/read closes only affected surfaces; a record-read revoke does not close a still-create-authorized create surface or hide entity-authorized headers, while an entity-metadata revoke closes navigation and its object route.
-- Old permission/Schema/record/candidate/form responses cannot overwrite the current generation.
-- Submits are blocked while the access generation changes.
-
-## Audit
-
-Run:
+## Executable checks
 
 ```bash
 node skills/make-app-permission/scripts/audit-make-app-permission.mjs <project-root>
+node skills/make-app-permission/scripts/permission-conformance-suite.mjs <adapter-module>
 ```
 
-The audit should fail on outbound IAM request filters containing `make.platform.*`, including a platform-key array assigned to a local variable and then passed directly as `body`/`payload`/`request.permissionKeys`; missing `meta.entity.read` dynamic-route or navigation gates; table headers tied to `data.record.read` through direct props, early returns, ternaries, or derived column variables; missing empty/cleared rows after a record-read revoke; missing create permission helpers; legacy create helpers migrated away from the retained `meta.field.read` profile; existing-record edit helpers requiring meta.field.update or data.field.update, or bypassing restrictive metadata/read/write states by choosing an editable row; missing/overwritten `createFields`; `createFields ?? fields`; runtime `editableFields` use; create fields built from visible/editable sets; unfiltered create payloads; operation entries tied to field count; permission-only refresh without Schema refresh/invalidation; and obvious field-access state-array coercion through `String(...)`, text helpers, template interpolation, `.toString()`, or `.join()`. Response-side filtering of surplus platform rows is allowed. A positive navigation, route, or row-clear signal must be consumed by that same surface: a `ProtectedRoute` must be returned by the dynamic object route and use its resolved entity key, and an explicit empty row branch must occur on a Table/Grid/Canvas row prop or flow into it. Unrelated guards, entity filters, row props, store clears, or page components do not satisfy the gate.
+The audit is heuristic: failures block completion; resolve each warning. It checks App-scoped proxy usage, consumed navigation/route guards, independent table headers and cleared rows, legacy createFields/payload contracts, extra field-update gates, effective permission helpers, state-array preservation and coupled refresh. It does not replace behavioral, UI or backend verification. An unrelated guard/row clear or a helper name that always returns true is not evidence of enforcement.
 
-The audit is heuristic. Its stringification rule is a targeted defense against known bad shapes, not complete data-flow proof. It must reject coercion that affects a normalization result or permission branch, including direct `if`/`switch`/loop conditions. It must lexically ignore comments and string literals and must not fail on diagnostic-only logging inside a named normalization helper, including structured log arguments, `fieldAccess`-specific parameter names, and semicolonless code where an earlier return ends through automatic semicolon insertion. Parenthesized, bracketed, or operator-continued returns remain result-affecting and must still fail. Host tests must prove permission matching, actual form field sets, payloads, Lookup target visibility, generation safety, and server-side enforcement.
+### Adapter: seven core exports plus two extensions
 
-## Executable behavior conformance
-
-Static source signals cannot prove that permission helpers deny missing access. A helper set that always returns `true` is invalid even if every required function name exists. Create a thin adapter that imports the production helpers and exports:
+Create a thin adapter that imports production behavior and exports:
 
 ```text
 normalizeAccess
@@ -99,54 +25,84 @@ isCreateCapableField
 isEditCapableField
 ```
 
-The seven core exports above remain the required adapter shape. The adapter may additionally export `canReadEntityFieldMetadata` and `canBulkUpdateEntityField` as thin wrappers around existing production selectors or operation-aware field helpers; these names do not require new production exports. When present, the suite tests each extension. When absent, it reports the corresponding cases as `SKIP` and excludes them from the passed count. Missing extensions never weaken the core create/read/update checks or allow metadata permissions to authorize business values.
+Do not duplicate permission logic in the adapter or add new production exports just to satisfy names. Existing selectors can be wrapped. Use the host's existing TypeScript runner for TS adapters; no additional runtime dependency is required solely for verification.
 
-For a host that exposes batch editing, its CI/publish gate must require the batch extension. For metadata-header verification, require the metadata extension:
+Optional thin wrappers:
+
+| Export | When tested | Force coverage |
+| --- | --- | --- |
+| `canReadEntityFieldMetadata` | Automatically when exported | `--require-field-metadata` |
+| `canBulkUpdateEntityField` | Automatically when exported; required in a batch-edit host's CI/publish gate | `--require-bulk-update` |
+
+Missing optional wrappers produce explicit `SKIP`, excluded from the passed count. Require flags fail if their extension is missing; a provided non-function extension is invalid. Unknown flags fail usage validation. Core create/read/update checks always run. A host without batch editing need not supply the bulk extension.
 
 ```bash
 node skills/make-app-permission/scripts/permission-conformance-suite.mjs <adapter-module> \
   --require-field-metadata --require-bulk-update
 ```
 
-Each flag fails if its adapter extension is missing. A host without batch editing need not provide a batch-field helper. Validate metadata headers through the host's existing field selector; do not add a production helper solely to meet an adapter name.
+`isEditCapableField` must be the production guard consumed by edit rendering, cell editors, validation and update payloads: reject both ID types, while preserving authorized audit-field compatibility. Exact keys/types are in [system-field-contract.md](system-field-contract.md).
 
-`isEditCapableField` is the production host-capability guard used before edit rendering, cell-editor attachment, and update payload construction. It must reject both ID types without excluding audit keys by name.
+## Permission regression matrix
 
-Run:
+Use the executable suite and mutation tests for pure model behavior; add host integration cases for the actual form, route, payload and Service consumers.
 
-```bash
-node skills/make-app-permission/scripts/permission-conformance-suite.mjs <adapter-module>
-```
+| Area | Required cases / expected boundary |
+| --- | --- |
+| Key/resource matching | Exact, global and segment key wildcards; App/parent/entity/*/exact resources; namespace aliases at equal specificity; named-entity isolation; concrete requested identifiers reject non-strings, blanks and literal wildcard. |
+| Row selection | Ignore malformed tenant-root/other-App rows and valid unknown current-App keys before effect/field validation; malformed supported current-App or unclassifiable resources fail the whole snapshot closed. Surplus rows cannot block Schema readiness. |
+| Envelope/row validation | Missing/non-App scope; conflicting/null/blank/non-string-equivalent appResource; invalid effect/truncated key/namespace/wildcard tenant or App; null/primitive/array row and non-array permissions; malformed fieldAccess containers/keys/empty or unknown/mixed states. Deny without throwing; never drop a selected malformed row while retaining sibling allows. |
+| Legacy ordinary create | Historical meta.field.read create states and `createFields`; independent create gate. Preserve specificity, same-level union, named-over-baseline and hidden exceptions. Empty createFields stays empty; operation rows cannot invent fields; creatable-only remains create-only. |
+| Existing-record gates | Console-style record wildcard plus visible Schema fields allows editing without meta.field.update/data.field.update. Update/delete/bulkUpdate allow/missing/deny combinations remain independent. Revoke/restore rechecks the current gate. |
+| Effective restrictions | Metadata-read and every applicable record read/write source; arrays mixing editable/compatibility `*` with readonly/hidden/fullMask/partialMask deny writing. Keep same-row and cross-row baseline/named restrictions without Statement provenance; broader restrictions survive more-specific allows. Unrelated-entity restrictions do not leak. |
+| Defaults/protocols | No field restriction defaults writable inside the requested allowed operation and Schema/editor bounds, without a named editable grant. Restrictions never cancel siblings. Legacy creatable-only is unreadable/unwritable for existing records. Pure Decision envelopes cannot be coerced into raw principal inputs. Confirmed Statement specificity/final Decision maps are distinct from raw inference. |
+| Read behavior | Entity metadata, headers and record read independent; denied/hidden values absent, masks preserved, no extra read granted by metadata write. |
+| System fields | Exact ID/audit create exclusions, ID edit exclusions, similarly named business fields preserved, authorized audit fields remain editable, process status/lock never written. |
 
-For TypeScript adapters, invoke the command with the project's existing TypeScript runner. The adapter must delegate to production code rather than duplicate permission logic. For the exported/required capabilities, the suite proves missing operation denial, named-entity isolation, deterministic pre-validation row selection, rejection of non-string/blank/wildcard requested identifiers, the legacy-create `* < App < entity/* < entity/exact` resource order, malformed permission-envelope and explicit App-resource rejection, valid state-list preservation, deny-wins, independent operation gates, legacy create fields, effective existing-record field restrictions, conservative raw-baseline/array handling, confirmed-Statement specificity versus cross-Statement strictness, and the canonical create/edit system-field exclusions.
+Preserve scalar/array states without coercion, explicit deny precedence, and all current suite/audit regression cases. Report actual pass/skip counts; totals vary with suite revision and extensions.
 
-The supplied revision-12 incident report is background evidence for a separate application, not this PR's verification. The bundled test adapter and mutation tests validate the checker, not a business App. Case totals vary with the current suite and exported extensions; report the actual executed/pass/skip counts instead of a fixed acceptance count. Report their results separately from an actual host-adapter run and from backend/browser acceptance. If a real host adapter has not been exercised, state that limitation. Cross-check backend permission definitions and create/update field-state behavior before treating these examples as a platform contract; do not infer semantics from permission-key names alone.
+## Host integration and lifecycle matrix
 
-## Host gate integration
+| Surface | Required verification |
+| --- | --- |
+| Service proxy | Correct route, App scope, IAM path, target header, trusted tenant/app identity, login forwarding and runtime-mode scope. Every completed upstream response preserves HTTP status, Content-Type and body, including 2xx/4xx/5xx; only no-response transport failure may use a documented local error. |
+| Schema | Preserve `fields`/`createFields` independently through Service/shared types/UI. Missing/null/invalid createFields is empty, never falls back to fields; editableFields does not change edit behavior. Caches and in-flight requests are isolated by principal/tenant/App/access generation. |
+| Navigation/rows | Entity permission hides navigation and blocks direct routes before mount. Record-read revoke skips every list/detail/pagination/control request and supplies empty rows to the actual table, retaining authorized headers; disabled queries cannot leave cached values. Metadata-only headers never expose denied raw values, filters, Lookup labels or edit fields. |
+| Create | Ordinary create-only invisible fields render/submit only there; fields outside createFields or hidden by legacy selection remain absent. Zero-field create retains entry, shows “暂无可新建字段” and blocks unsupported empty submission. Validate only rendered authorized fields using `validations.isRequired` and type rules, never an alternate Schema required key. |
+| Approval create | [Start-config fields](../../make-app-approval/references/initiation-contract.md) absent from ordinary createFields still render/save when authorized. UI/Service switch together, retain App/entity/create qualification, never reapply ordinary field intersections or fall back after config failure. Include Lookup/File start fields: latest source config, visible/existing targets and confirmed upload capability. |
+| Edit/submit | Metadata-visible/readable fields and effective writable state control form/cell editors, required validation and payloads. Recompute current authorization in UI and Service: one restricted/stale/unknown/injected attempted field rejects the whole single/bulk mutation, preserves draft/selection, reports failure and never silently trims into success. Restoration does not auto-replay. |
+| File | Persisted-record-only File absent from create render/required/payload. Explicit pre-upload/direct-create mode includes only approved attachment arrays without recordID; read/edit retains existing identity and capability checks. |
+| Lookup | Dedicated candidates and effective target reads; no target createFields visibility bypass. Create `{ data, relations }` and snapshot-preserving edit `{ values, data? }` contracts reauthorize all keys, synthesize full qfei_relation, preserve unrelated relations and reject raw/hidden keys, invalid cardinality or identities, ambiguous relations and malformed snapshots. |
+| Refresh | Permission → invalidate/reload Schema → atomic generation publish → recompute surfaces → data only if read allowed. Disable protected old access/submission from refresh start; never publish new permission with old Schema or restore old access after failure. Ignore old permission/Schema/record/candidate/form results. Grants appear on refresh; revokes close only affected surfaces, preserving authorized create/navigation/headers and rejected drafts. |
+| Errors | Permission/Schema failure fails closed and retains safe `kind/status/title/description/traceId` through Provider state to the shared observability card, including first load before page mount. Trace ID is visible when available; permission denial remains forbidden without a fabricated request error/Trace ID. |
 
-- Keep the audit and conformance runner project-local, or consume them from a versioned build dependency. Do not make CI depend on a sibling checkout or an unversioned local Skill installation.
-- Make the host's default test, CI workflow, or publish verification invoke both checks. A change record stating that two projects passed once is acceptance evidence, not a continuing gate.
-- Add a host contract test that asserts the gate commands still exist and that the vendored/current runners contain the multi-state-array audit and behavior cases.
-- Treat source-to-installed-Skill comparison as a local install/release verification. Generic CI must not require a developer home-directory copy.
+## Portable host gates and evidence
 
-For that local install/release verification, run the directory-level checker with explicit paths:
+- Install audit/conformance runners project-locally or through a versioned dependency. Default test, CI or publish verification must invoke both, with required extensions for exposed capabilities.
+- Verify that the host gate actually executes both runners, including extension flags for exposed capabilities. Exercise regression cases rather than merely searching source text for helper or case names. A one-off successful run or change-log entry is not a continuing gate.
+- Generic CI must not depend on a sibling checkout or unversioned developer-home Skill installation.
+- Fixture/mutation tests prove the checker, not a business App. Report them separately from real production-helper adapters, backend enforcement and browser save/read-back. State when any layer was not exercised; background incident evidence cannot substitute for that host's validation.
+- For host permission implementations, completion requires changed tests, audit (warnings resolved), production-helper conformance, portable host gates and an unchanged real reference-project audit. Skill-only maintenance uses source/checker self-tests plus metadata/cross-Skill contracts; report unavailable host/online evidence explicitly rather than manufacturing a host integration. Fresh independent review is useful for complex changes. Do not label unrun acceptance as passed.
+
+## Maintainer only: installation and release synchronization
+
+These are local maintainer release checks, not App runtime requirements or portable host CI. An ordinary source review does not publish or overwrite installed copies.
+
+For an explicitly requested local installation or release, compare the complete source and installed directories:
 
 ```bash
 node skills/make-app-permission/scripts/check-installed-skill-sync.mjs \
   skills/make-app-permission <installed-skill-dir>
 ```
 
-It must fail on source-only, installed-only, or content-mismatch files. Do not replace this complete comparison with a hand-maintained file list.
+The checker must fail on source-only, installed-only and content-mismatch files. Pass explicit paths; do not replace the complete comparison with a hand-maintained file list or hardcode a developer home path.
 
-## Completion rule
+For an authorized release changing shared Service/auth/permission guidance, publish through the platform Skill release flow first, update the installed platform package, then verify all affected Skills:
 
-Do not report complete until:
+```bash
+npx skills update qfeius/make-platform-skills
+node scripts/check-installed-make-platform-skills-sync.mjs \
+  skills <installed-skills-dir>
+```
 
-- new/changed tests pass;
-- the permission audit passes or every warning is explicitly resolved;
-- the executable permission conformance suite passes against production helpers;
-- the host's default test, CI, or publish gate invokes both permission checks;
-- Skill metadata/quick validation and cross-Skill contract tests pass;
-- a real reference project passes the audit without changing that project;
-- for publishing/installing this Skill, source and installed Skill copies are synchronized; a review-only PR does not publish or overwrite installed copies;
-- complex revisions have fresh-agent forward-test evidence when available.
+Run these only after the source revision is published. Confirm source/installed synchronization before declaring that installation or release complete.

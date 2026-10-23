@@ -1,6 +1,6 @@
 # UI permission runtime
 
-Use this reference for frontend permission providers, matching, route/action gates, field sets, payloads, and refresh.
+Use this reference for UI consumption and lifecycle. Compute all authorization with [permission boundaries](permission-boundaries.md), and use [system-field-contract.md](system-field-contract.md) for exact capability guards.
 
 ## Contents
 
@@ -11,7 +11,6 @@ Use this reference for frontend permission providers, matching, route/action gat
 - Read/edit flow
 - Special fields and Lookup
 - Refresh generation
-- Readiness blockers
 
 ## Provider and data sources
 
@@ -33,37 +32,18 @@ Use the host API adapter for `/app/principal/permission`; never raw-fetch IAM fr
 
 When permission or permission-aware Schema loading fails, keep a safe structured request error in Provider state through the error outlet: `kind/status/title/description/traceId`. The status is optional when no HTTP response exists, and description may be absent. Preserve the request Trace ID even on the first load, when the page route has not mounted yet. The error title and description must already be safe user text; do not pass a raw Error, upstream response body, or stack to the UI. Continue to fail closed for authorization, but render the failure through the shared `make-app-observability` card. Ordinary permission denial stays a forbidden state and does not acquire a synthetic Trace ID. If nearby copy tells users to provide a Trace ID, confirm the card actually receives and displays a valid one.
 
-Normalize each entity's permission-trimmed Schema collections independently:
+## Permission selectors
 
-- `fields`: list, detail, filter, edit upper bound;
-- `createFields`: create upper bound; missing means `[]`, with no fallback to `fields`;
-- `editableFields`: ignored by current runtime edit logic.
-
-## Permission model
-
-Normalize to `{ principal, scope, appResource, permissions }`, deriving `appResource` only from the validated response `scope` rather than trusting an independently supplied value. Before normalizing `permissionKey`, `resource`, `effect`, and `fieldAccess`, apply the deterministic selection table in `permission-boundaries.md`. Ignore only clearly unrelated rows; selected and unclassifiable rows are strict-validation inputs and therefore fail closed when malformed. Ignored rows must never grant or deny App access or block the permission-to-Schema loading flow.
-
-Provide pure permission behavior through helpers or equivalent existing selectors; the names below describe behavior, not mandatory new production exports:
+Consume the validated `{ principal, scope, appResource, permissions }` model and independent Schema collections from [permission boundaries](permission-boundaries.md); do not duplicate its normalization or matching algorithm in components. Keep pure selectors (or equivalent existing helpers):
 
 - `canUseEntityOperation(access, entityKey, permissionKey)`
-- `canCreateEntityField(access, entityKey, fieldKey)`
-- `canReadEntityField(access, entityKey, fieldKey)` — `data.record.read` for business values
-- `canUpdateEntityField(access, entityKey, fieldKey)`
-- `creatableFieldKeysForEntity(access, entityKey, createFields)`
-- `visibleFieldsForEntity(access, entityKey, fields)` — metadata-visible headers
-- `recordReadableFieldsForEntity(access, entityKey, visibleFields)` — business values
-- `editableFieldKeysForEntity(access, entityKey, visibleFields)`
+- `canCreateEntityField` / `creatableFieldKeysForEntity` for legacy create
+- `visibleFieldsForEntity` for metadata headers
+- `canReadEntityField` / `recordReadableFieldsForEntity` for business values
+- `canUpdateEntityField` / `editableFieldKeysForEntity` for effective single-update capability
+- equivalent operation-aware bulk selectors when batch editing is supported
 
-- Field metadata visibility (`meta.field.read`): use the existing visible-field selector; the conformance adapter may expose it as `canReadEntityFieldMetadata(access, entityKey, fieldKey)`.
-- When batch editing is supported, evaluate independent `data.record.bulkUpdate` field authorization through the existing operation-aware helper; the conformance adapter may expose it as `canBulkUpdateEntityField(access, entityKey, fieldKey)`.
-
-Support existing key/resource matching and deny-wins gates. Preserve legacy create range/union/named-field behavior only in that profile. Existing-record writes use the conservative effective-state merge in [design and protocol profiles](design-and-protocol-profiles.md): do not discard broad restrictions, union away readonly/masks, or infer Statement grouping from raw rows.
-
-The cited v3 field states are `hidden`, `fullMask`, `partialMask`, `readonly`, `editable`; default editable is bounded by an allowed operation and Schema. The raw profile additionally accepts compatibility `*` and legacy `creatable`, not new platform permission points. Only retained ordinary create uses the historical set `creatable|readonly|editable|partialMask|fullMask|*` from `meta.field.read`. Existing-record writes reject every applicable readonly/hidden/mask, even in an array containing editable or `*`.
-
-Empty/omitted restrictions add no restriction under an already allowed operation; they cannot bypass other restrictions or supply a missing gate. `creatable` alone never grants existing-record writing. When all applicable rows omit restrictions, an already visible/readable Schema field defaults writable under the requested allowed operation and editor capability; no explicit per-field editable grant is required.
-
-An omitted `fieldAccess` property or empty object contributes no restriction from that raw row; it never cancels applicable restrictions elsewhere. For selected rows, explicit `null`, a non-object, an array, a blank field key, an empty state list, an unknown state, or a state list containing non-strings is malformed IAM data and must fail the whole access snapshot closed. Reject invalid effects, non-three-part permission keys, missing/non-App scopes, arbitrary namespaces, and wildcard tenant/App resources as well; never discard a malformed selected row while keeping sibling allows or normalize malformed selected input into an effective allow. Classify and ignore clearly unrelated rows before this validation; null/primitive envelopes or rows and non-array `permissions` must deny without throwing.
+Names describe behavior, not mandatory new production exports. Thin conformance wrappers are specified in [testing](testing-and-audit.md).
 
 ## Route and operation gates
 
@@ -71,7 +51,7 @@ An omitted `fieldAccess` property or empty object contributes no restriction fro
 - Bind fixed routes to an entity and permissionKey.
 - Require `data.record.read` before list/detail loading. It only gates record requests and values; it must not gate an entity-authorized navigation entry, table shell, or column headers.
 - Require `data.record.create` for create routes, create entry, open handler, and submit.
-- Preserve ordinary legacy create fields selected from `createFields` by the historical create-state set in matched `meta.field.read` results. Keep the `data.record.create` gate independent. This edit fix does not establish a new create protocol.
+- Consume the ordinary-create legacy selector or approval-start field selector defined in permission boundaries; keep the create operation check separate.
 - Require `data.record.update` for edit routes/entry/submit/cell commit.
 - Keep delete and bulkUpdate independent.
 - Do not use field-count conditions to hide create or normal edit entries.
@@ -91,9 +71,9 @@ sourceRows = recordState.items
 tableRows = canReadRecords ? sourceRows : []
 ```
 
-Render the navigation item and object route only when `canViewEntity` is true and the entity exists in permission-aware Schema. In the dynamic route, evaluate `canViewEntity` after resolving the Schema entity and return the host forbidden result when it is false. Render the table shell and its headers from `visibleFields`, not from `canReadRecords`. Gate the records query, row values, detail open action, pagination, and record-backed table controls with `canReadRecords`. Additionally sanitize every row/detail value through effective field restrictions, including the matched `data.record.read` result's `fieldAccess`: keep metadata-authorized headers independently, render no raw values for denied fields, and preserve masks. A record-operation allow never cancels an applicable field restriction.
+Render navigation/the dynamic route only for a Schema-present, entity-authorized object. Return the resolved entity route guard before mounting the page. Render headers from `visibleFields`; gate requests, details, pagination and record-backed controls with `canReadRecords`. Apply current effective field restrictions before displaying values; retain masks and omit denied raw values.
 
-When `canViewEntity` and `visibleFields` are authorized but `canReadRecords` is false, keep the table mounted with `columns={visibleFields}` and `rows={tableRows}` (or the equivalent CanvasTable API, where `tableRows` is explicitly `[]`). Do not execute `onDataLoad`, do not render cached/stale rows, and show a no-record-access/empty state without removing the headers. On a permission refresh that revokes record read, clear/invalidate the record store that supplies `sourceRows` before the next render or continue deriving `tableRows` from current access; changing only a request's `enabled` flag is insufficient. A record read grant never expands field visibility; a field read grant never authorizes a record request.
+On absent/revoked record read, supply `rows={tableRows}` (or the Canvas equivalent) with explicit `[]`, retain metadata-authorized headers, and skip `onDataLoad`. Either derive rows from current access as above or clear the actual row store before render: changing query `enabled` alone cannot remove cached rows. Use a no-record-access/empty state instead of removing the table.
 
 ## Create flow
 
@@ -137,17 +117,25 @@ editable = editableFieldKeysForEntity(access, entityKey, readable)
 - Mark visible non-editable form fields readonly/disabled.
 - Do not attach cell editors or required validation to non-editable fields.
 - Build update payloads from rendered fields, then validate every attempted field against current effective restrictions in UI and Service. If any is restricted, stale or unauthorized, reject the whole mutation, retain the draft and report failure; never silently drop that field and show success.
-- Ignore backend `editableFields`; editing requires metadata-visible/readable fields, the requested operation gate and effective field state. Single update and bulkUpdate gates remain independent, but both retain applicable metadata-read and record read/write restrictions. Neither `meta.field.update` nor `data.field.update` is a prerequisite.
+- Consume the effective edit selector from permission boundaries; ignore backend `editableFields` and keep single/bulk operation contexts separate.
 - A create revoke closes create only. An update revoke closes edit only. A `data.record.read` revoke closes detail/edit and stops reads while retaining entity-authorized navigation and headers; it must not close a still-create-authorized create surface. A `meta.entity.read` revoke closes the object route and removes the navigation entry.
 
 ## Special fields and Lookup
 
-- Exclude ID and system-managed create/update audit fields from create capability even if malformed input Schema/permission includes them.
-- Preserve audit field edit capability when the field is visible, update-authorized, and host-editable.
-- Treat the exact type `Make.Field.File` as a host-contract capability, not an implicit permission result. The host adapter must declare which upload contract it implements: (a) persisted-record FileField routes such as `POST .../records/:recordID/files/:fieldKey`, which require an existing record identity and therefore make File create-incapable; or (b) an explicit pre-upload/direct-create contract that returns the backend-approved attachment array without requiring `recordID`, in which case the field may remain create-capable and only that attachment array enters `data[fieldKey]`. Never infer mode (b) merely from `required`, `createFields`, or a File permission. Apply this capability guard after the mode-specific source authorization: ordinary create retains the legacy `createFields` intersection with fields selected by matched `meta.field.read` results, approval create uses authorized start-config fields. In mode (a), do not render, required-validate, or submit the File field during create. Its read/edit path remains independent and uses visible fields, update permission, an existing record identity, and the host edit-capability guard.
-- Treat the exact type `Make.Field.Lookup` as a relation-backed control only when Schema relation metadata and the host relation-write contract both support it; otherwise it is read-only/unsupported for write even if field permission allows it. Load candidates through the host Lookup option route (normally `GET .../lookup-options?sourceEntityKey=&lookupFieldKey=&keyword=&page=&size=`), never through an unrestricted target list.
-- Resolve a Lookup source definition by mode: 普通新建 may use visible `fields` first and then `createFields` for a create-only source field; 审批新建 must use the authorized 启动配置 field definition as its source, even when an ordinary visible field has the same key. Resolve the target entity and display field from visible target `fields` only, then restrict option labels and values using the target entity's effective read restrictions, including its matched `data.record.read` result's `fieldAccess`; never use target `createFields` to bypass read visibility. Candidate values are target `recordID` strings; labels and option objects are presentation only.
-- Split ordinary and Lookup values before persistence. For create, retain the latest mode-specific allowlist construction; for existing-record edits, validate every attempted ordinary and relation key against the current effective field restrictions and reject the whole mutation on any violation before constructing the payload. For create, exclude Lookup field keys from ordinary `data`; UI sends `{ data: ordinaryAllowlistedData, relations: { [lookupFieldKey]: recordID | recordID[] | null | [] } }` to `POST .../records`. Service must reject any client-provided raw `data.qfei_relation` or Lookup key hidden in `data`, re-authorize each `relations` key against 普通新建的 permission-trimmed `createFields` 或 审批新建的权威 启动配置 字段白名单, validate relation metadata, cardinality, target visibility/existence and exact target `recordID`, then synthesize the Make payload `data.qfei_relation: [{ entityKey, id }]`. For edit, never let UI submit a partial raw `qfei_relation`; send authorized changes as `{ values: { [lookupFieldKey]: recordID | recordID[] | null | [] }, data?: ordinaryAllowlistedData }` to `PATCH .../records/:recordID/lookup-relations`. Service must re-authorize each source field, validate ordinary `data` against the current permission-trimmed visible/update contract, read the exact current source record, fail closed on malformed unrelated relation entries, preserve unrelated relations, and synthesize the complete `qfei_relation`. Reject client-provided raw `qfei_relation`, non-allowlisted fields, invalid cardinality, invisible targets, and missing/mismatched source or target identities. Because the backend `qfei_relation` item contains only `{ entityKey, id }`, relationKey is not encoded; if more than one independently writable relation from the source can point to the same target entity, this generic field-key route is ambiguous and must fail closed unless the host documents and tests a backend contract that disambiguates it.
+Apply the exact ID/audit/process-field guards in [system-field-contract.md](system-field-contract.md) after the mode-specific field selector.
+
+**File (`Make.Field.File`)** is a host capability. Declare one supported contract: persisted-record routes (`POST .../records/:recordID/files/:fieldKey`) require an existing record and are create-incapable; an explicitly documented pre-upload/direct-create contract may accept only the backend-approved attachment array without `recordID`. Never infer pre-upload from required metadata, createFields or permission. For persisted-record-only files, omit create rendering, required validation and payload; read/edit still uses current authorization, record identity and edit capability.
+
+**Lookup (`Make.Field.Lookup`)** is writable only with relation metadata and a complete host mutation contract; otherwise render readonly/unsupported. Load candidates via the dedicated route (normally `GET .../lookup-options?sourceEntityKey=&lookupFieldKey=&keyword=&page=&size=`), never an unrestricted target list. Ordinary-create source definitions resolve visible `fields`, then `createFields` for create-only sources. Approval-create sources use authorized start-config definitions even when an ordinary visible key matches. Target entity/display fields always come from visible target `fields`, with target effective read restrictions applied to labels/values; target `createFields` cannot bypass visibility. Candidate values are exact target `recordID` strings; labels/option objects are presentation only.
+
+Keep ordinary data and Lookup values separate:
+
+| Operation | UI-Service payload | Service requirements |
+| --- | --- | --- |
+| Create `POST .../records` | `{ data: ordinaryAllowlistedData, relations: { [lookupFieldKey]: recordID \| recordID[] \| null \| [] } }` | Exclude Lookup keys from ordinary data. Reauthorize source keys by the current ordinary-create or approval-start allowlist; validate metadata, cardinality, target visibility/existence and exact identity; synthesize Make `data.qfei_relation: [{ entityKey, id }]`. |
+| Edit `PATCH .../records/:recordID/lookup-relations` | `{ values: { [lookupFieldKey]: recordID \| recordID[] \| null \| [] }, data?: ordinaryAllowlistedData }` | Validate **all** attempted relation/ordinary fields against current effective restrictions before payload construction. Read the exact current source record; reject malformed unrelated relation entries, preserve unrelated relations, and synthesize the complete `qfei_relation`. |
+
+Reject client raw `qfei_relation`, Lookup keys hidden in ordinary data, non-allowlisted fields, invalid cardinality, invisible targets and missing/mismatched identities. Existing-record violations reject the whole request and preserve the draft. Because Make relation items contain only `{ entityKey, id }`, multiple independently writable relations to the same target entity are ambiguous: fail closed unless a documented/tested backend contract disambiguates them.
 
 ## Refresh generation
 
@@ -174,15 +162,4 @@ Treat `nextAccess` as a candidate until `nextSchema` succeeds. At refresh start,
 
 Fail closed when either permission or Schema refresh fails.
 
-## Readiness blockers
-
-- Ordinary create form reads `fields` or `editableFields` instead of `createFields`; approval create form ignores the authorized start-config fields.
-- Missing ordinary `createFields` falls back to visible fields, or missing approval start-config falls back to ordinary fields.
-- Ordinary create is migrated away from retained legacy `meta.field.read` create behavior without same-environment verification, omits `createFields`, or treats legacy `creatable` as readable; approval create reapplies the ordinary intersection.
-- Edit consumes `editableFields` or skips visibility.
-- Entries are hidden by writable-field count.
-- Submit expands raw values without authorization, silently trims a restricted attempted update into a success, discards a rejected draft, or automatically replays after restoration.
-- ID/audit fields can be created; ID fields can be edited or enter update payloads; audit edit is accidentally removed.
-- Create-only Lookup reads an invisible target field.
-- Permission refresh does not invalidate/reload Schema or accepts stale results.
-- Direct URL/handler access bypasses operation checks.
+Before completion, run the [behavior and lifecycle checks](testing-and-audit.md); component visibility alone does not prove authorization.

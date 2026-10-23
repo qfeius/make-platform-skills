@@ -25,19 +25,9 @@ data.record.delete      -> single delete
 data.record.bulkUpdate  -> batch edit for two or more records
 ```
 
-These three keys are independent; they must not be coupled or inferred from one
-another.
+Granting or denying one key does not change either of the others. A bulkUpdate-only user can batch edit multiple records without single-update permission.
 
-Having `data.record.bulkUpdate` without `data.record.update` must still show batch
-edit for multiple selection. Having `data.record.update` without
-`data.record.bulkUpdate` must not expose batch edit. Delete never implies either
-update permission.
-
-Use `meta.field.read` for metadata visibility, and the record-read gate plus effective restrictions for business values. Existing-record single/bulk writes require the requested independent operation and effective writable field state, never `meta.field.update` or an invented `data.field.update` prerequisite. Follow [design and protocol profiles](../../make-app-permission/references/design-and-protocol-profiles.md), based on PermissionDesign v3.0.0 (2026-08-04).
-
-In the current raw principal profile, applicable metadata-read and record read/write restrictions all participate. Do not grant a batch field merely because one bulkUpdate row contains editable. Preserve readonly/hidden/mask restrictions from other applicable rows and restrictive array entries, even beside editable or compatibility `*`. Raw rows may lose Statement identity; without confirmed provenance retain named and baseline restrictions within and across rows. Only confirmed Statement groups support named-over-own-baseline; cross-Statement restrictions take the strictest state.
-
-`fieldAccess` is a result property; state values are not permission keys. Default editable stays inside allowed record/Schema/capability bounds. Do not use field counts to infer record-operation permission. Ordinary create keeps its separate legacy profile and approval exception.
+Consume metadata visibility, readable values and effectively writable fields from [make-app-permission](../../make-app-permission/references/permission-boundaries.md). Apply its result to the requested operation, then apply the package's editor capabilities. This Skill owns action presentation and selection; permission parsing and field-state merging stay in that shared model. Do not infer record-operation permission from field counts.
 
 ## Action state
 

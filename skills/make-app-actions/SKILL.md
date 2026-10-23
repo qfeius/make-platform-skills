@@ -33,7 +33,7 @@ requests, query context, field controls, business feedback, and list refresh.
    and verify its resolved version satisfies the required range; then
    read `package.ai.json`, parse `package.ai.json.readOrder`, read every declared
    file in order, and use public exports only. Read
-   `references/package-integration.md` before changing package integration.
+   [references/package-integration.md](references/package-integration.md) before changing package integration.
 3. For desktop/tablet, use the published CanvasTable 1.3.1 contract for the public selection snapshot,
    `clearSelection`, `setRowColors`, and `clearRowColors` APIs required by the
    package adapter. Its public docs must also guarantee that business row colors
@@ -45,7 +45,7 @@ requests, query context, field controls, business feedback, and list refresh.
    with `resolveCanvasSelectedRecordSnapshot`. Preserve `selectionIntent`; never
    infer select-all from selected and total counts. Treat CanvasTable instance
    replacement and same-query `totalCount` changes with the lifecycle in
-   `references/selection-and-operation-snapshot.md`; never replay an action-owned
+   [references/selection-and-operation-snapshot.md](references/selection-and-operation-snapshot.md); never replay an action-owned
    selection into a replacement instance. Limit one supported Shift range gesture
    to at most 200 records through the installed CanvasTable public contract; if
    that contract cannot enforce the limit, report a capability blocker instead of
@@ -72,7 +72,7 @@ requests, query context, field controls, business feedback, and list refresh.
    map authoritative `noPermissionRecordIds` from the documented HTTP 200 business
    denial to exact whole-row error-red feedback. Select-all denial has no row IDs
    and remains toast-only.
-8. For batch edit, require the independent bulkUpdate gate and metadata-visible/readable fields with effective writable state. Preserve applicable metadata-read and record read/write restrictions, restrictive arrays and baselines; follow the permission Skill's versioned raw-principal profile. Do not require meta.field.update/data.field.update or select just one permissive operation row. Then apply package capability filtering. New Make App hosts use the package's public generic
+8. For batch edit, consume the independent bulkUpdate gate and writable fields from the [shared permission model](../make-app-permission/references/permission-boundaries.md), then apply package capability filtering. New Make App hosts use the package's public generic
    `RecordBatchEditModal` with the selected design system's injected `Modal`,
    `FieldSelect`, and `ModeControl` to meet the default field-icon contract.
    This includes Ant Design hosts: `AntdRecordBatchEditModal` in `0.3.1` does
@@ -92,7 +92,7 @@ requests, query context, field controls, business feedback, and list refresh.
     query-context changes. Clear selection when keyword, filter, sort, group, or
     object context changes. A successful applied-query handoff clears selection;
     draft edits and failed saves/queries do not redefine the action target.
-11. For phone cards and detail task pages, read `references/mobile-card-actions.md`:
+11. For phone cards and detail task pages, read [references/mobile-card-actions.md](references/mobile-card-actions.md):
     use the package root headless core for the clicked/current record, never
     mount CanvasTable or the selection action bar, and do not expose record
     multi-select or batch actions. Card actions and detail actions are separate
@@ -100,20 +100,20 @@ requests, query context, field controls, business feedback, and list refresh.
 12. On desktop/tablet, remove edit/delete commands from detail surfaces when
     these actions are owned by the selection bar. Keep detail open as a
     read/display action.
-13. Add the tests in `references/testing-and-pitfalls.md` before reporting the
+13. Add the tests in [references/testing-and-pitfalls.md](references/testing-and-pitfalls.md) before reporting the
     workflow complete.
 
 ## Topic reference map
 
 | Task / topic | Read |
 | --- | --- |
-| Package installation, UI-library compatibility, public imports, host/package boundary | `references/package-integration.md` |
-| Independent operation permissions, cached principal, action visibility, denial UI | `references/action-permission-model.md` |
-| Canvas selection intent, 200 limits, query identity, immutable operation snapshot | `references/selection-and-operation-snapshot.md` |
-| UI-Service precheck and bulk routes, Make payloads, errors, call-count invariants | `references/service-contract.md` |
-| Single action behavior, batch modal fields, submit lifecycle, stale selection safety | `references/batch-edit-flow.md` |
-| Phone card and detail single edit/delete, no record selection or batch operations | `references/mobile-card-actions.md` |
-| TDD matrix, integration checks, races, readiness blockers | `references/testing-and-pitfalls.md` |
+| Package installation, UI-library compatibility, public imports, host/package boundary | [references/package-integration.md](references/package-integration.md) |
+| Independent operation permissions, cached principal, action visibility, denial UI | [references/action-permission-model.md](references/action-permission-model.md) |
+| Canvas selection intent, 200 limits, query identity, immutable operation snapshot | [references/selection-and-operation-snapshot.md](references/selection-and-operation-snapshot.md) |
+| UI-Service precheck and bulk routes, Make payloads, errors, call-count invariants | [references/service-contract.md](references/service-contract.md) |
+| Single action behavior, batch modal fields, submit lifecycle, stale selection safety | [references/batch-edit-flow.md](references/batch-edit-flow.md) |
+| Phone card and detail single edit/delete, no record selection or batch operations | [references/mobile-card-actions.md](references/mobile-card-actions.md) |
+| TDD matrix, integration checks, races, readiness blockers | [references/testing-and-pitfalls.md](references/testing-and-pitfalls.md) |
 | Canvas selection events, clearSelection, row colors, Shift selection | Use `canvas-table-integration` |
 | Principal IAM endpoint, permission resource matching, field access | Use `make-app-permission` |
 | Service layering, adapters, validation, logs, request context | Use `make-app-service` |

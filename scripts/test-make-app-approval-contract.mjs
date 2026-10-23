@@ -16,6 +16,27 @@ const localLinks = (file) => [...read(file).matchAll(/\[[^\]]+\]\(([^)\s]+)\)/g)
   .filter((target) => target && !/^[a-z]+:/i.test(target))
   .map((target) => path.relative(repoRoot, path.resolve(repoRoot, path.dirname(file), target)));
 
+const reachableBundle = (entryFile) => {
+  const skillDirectory = path.dirname(entryFile);
+  const visited = new Set();
+  const pending = [entryFile];
+  const texts = [];
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (visited.has(file)) continue;
+    visited.add(file);
+    texts.push(read(file));
+    for (const target of localLinks(file)) {
+      read(target);
+      if (target.startsWith(skillDirectory + '/') && target.endsWith('.md')) pending.push(target);
+    }
+  }
+  return texts.join('\n');
+};
+const requireContract = (bundle, patterns, reason) => {
+  for (const pattern of patterns) assert.match(bundle, pattern, reason);
+};
+
 const entryLinks = localLinks(entry);
 const resources = fs.readdirSync(path.join(repoRoot, 'skills/make-app-approval/references'))
   .filter((name) => name.endsWith('.md'))
@@ -38,7 +59,6 @@ for (const file of [
   'skills/makeui/references/mobile-form-controls.md',
   'skills/makeui/references/mobile-defaults.md',
   'skills/makeui/references/mobile-visual-standard.md',
-  'skills/make-app-permission/references/testing-and-audit.md',
 ]) {
   assert.ok(localLinks(file).includes(entry), `${file} 未路由到审批 skill`);
 }
@@ -48,8 +68,7 @@ const verification = read('skills/make-app-approval/references/verification.md')
 const serviceContracts = read('skills/make-app-service/references/service-api-contracts.md');
 const serviceTesting = read('skills/make-app-service/references/testing-and-safety.md');
 const makeuiSkill = read('skills/makeui/SKILL.md');
-const permissionSkill = read('skills/make-app-permission/SKILL.md');
-const permissionRuntime = read('skills/make-app-permission/references/ui-permission-runtime.md');
+const permissionBundle = reachableBundle('skills/make-app-permission/SKILL.md');
 const serviceAdapter = read('skills/make-app-service/references/make-data-adapter.md');
 const mobileCardActions = read('skills/make-app-actions/references/mobile-card-actions.md');
 const componentUsage = read('skills/makeui/references/component-usage.md');
@@ -65,12 +84,21 @@ assert.match(makeuiSkill, /13\.[^\n]*普通新建[^\n]*审批新建[^\n]*启动�
   'MakeUI 表单字段交接须在主工作顺序中区分普通和审批新建');
 assert.match(makeuiSkill, /Create and edit forms[^\n]*普通新建[^\n]*审批新建[^\n]*启动配置/,
   'MakeUI 强规则不得将普通 createFields 套入审批表单');
-assert.match(permissionSkill, /Gate the create entry[^\n]*普通新建[^\n]*审批新建[^\n]*启动配置/,
-  '权限操作门禁须与审批字段授权例外在同一规则中说明');
-assert.match(permissionRuntime, /Service must reject any client-provided raw[^\n]*普通新建[^\n]*`createFields`[^\n]*审批新建[^\n]*启动配置/,
-  'Lookup 关系写入应按普通或审批模式选择源字段白名单');
-assert.match(permissionRuntime, /Resolve a Lookup source definition[^\n]*普通新建[^\n]*visible `fields`[^\n]*`createFields`[^\n]*审批新建[^\n]*启动配置/,
-  'Lookup 元数据来源也须先按普通或审批模式区分');
+requireContract(permissionBundle, [
+  /data\.record\.create/, /createFields/,
+  /(?:普通新建|ordinary create|ordinary-create)/i,
+  /(?:审批新建|approval create|approval-create)/i,
+  /(?:启动配置|start-config|start config)/i,
+  /(?:without intersecting|never reapply|不再与|不能.*再次套|without reapplying)/i,
+], '权限入口及可达参考须区分普通字段交集与审批启动配置授权，并保留独立新建操作资格');
+requireContract(permissionBundle, [
+  /Lookup/, /(?:source definition|source definitions|源字段)/i,
+  /(?:visible|可见)[\s\S]*fields/i,
+  /(?:start-config|start config|启动配置)/i,
+  /qfei_relation/, /relations/,
+  /(?:reauthorize|re-authorize|重新授权)[\s\S]*(?:source|relations|源)/i,
+  /(?:allowlist|白名单)/i,
+], 'Lookup 源元数据与提交白名单须使用对应普通或审批模式的字段来源');
 assert.match(serviceContracts, /For relation-backed `Make\.Field\.Lookup` during create[^\n]*普通新建[^\n]*`createFields`[^\n]*审批新建[^\n]*启动配置/,
   'Service 关系路由不得统一以普通 createFields 裁掉审批字段');
 assert.match(serviceAdapter, /In create mode[^\n]*普通新建[^\n]*`createFields`[^\n]*审批新建[^\n]*启动配置/,

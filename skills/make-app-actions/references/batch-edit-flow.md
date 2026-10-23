@@ -61,7 +61,7 @@ Apply this order:
 
 Build batch candidates from runtime normalized schema:
 
-1. Require the independent `data.record.bulkUpdate` gate, then keep metadata-visible/readable fields whose effective state permits writing. Conservatively merge applicable `meta.field.read` and record read/write restrictions; do not pick one editable bulk row or borrow single-update operation permission. Any readonly/hidden/mask array state or baseline restriction denies writing, even beside editable/compatibility `*`. Follow the permission Skill's versioned raw-principal profile.
+1. Require the independent `data.record.bulkUpdate` gate. Obtain metadata-visible/readable fields with effective writable state from the [shared permission model](../../make-app-permission/references/permission-boundaries.md); use its current result rather than reparsing principal rows here.
 2. Pass those fields to `resolveBatchEditableFields`.
 3. Exclude readonly/derived Lookup fields or any field the installed package
    reports unsupported.
@@ -148,7 +148,7 @@ into the host.
 ## Submit lifecycle
 
 1. Acquire a single-submit lock; duplicate confirm clicks do nothing.
-2. Recheck the current cached `data.record.bulkUpdate` gate and target field's effective state across applicable metadata/read/write restrictions without refetching principal. Do not require metadata update or data-field-update permission.
+2. Recheck the cached `data.record.bulkUpdate` gate and target field's current authorization through the shared permission model, without refetching principal.
 3. Re-resolve current field capability and validate the normalized value.
 4. Build `data`/`relations` using the host's existing field mutation builders.
 5. Reuse the frozen prechecked target exactly and call one Service bulk route.

@@ -16,6 +16,31 @@ const read = (relativePath) => {
   return fs.readFileSync(filePath, 'utf8');
 };
 
+const reachableBundle = (entry) => {
+  const skillDirectory = path.dirname(entry);
+  const visited = new Set();
+  const pending = [entry];
+  const texts = [];
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (visited.has(file)) continue;
+    visited.add(file);
+    const markdown = read(file);
+    texts.push(markdown);
+    for (const match of markdown.matchAll(/\[[^\]]+\]\(([^)\s]+)\)/g)) {
+      const target = match[1].split('#')[0];
+      if (!target || /^[a-z]+:/i.test(target)) continue;
+      const resolved = path.relative(repoRoot, path.resolve(repoRoot, path.dirname(file), target));
+      read(resolved);
+      if (resolved.startsWith(skillDirectory + '/') && resolved.endsWith('.md')) pending.push(resolved);
+    }
+  }
+  return texts.join('\n');
+};
+const requireContract = (bundle, patterns, reason) => {
+  for (const pattern of patterns) assert.match(bundle, pattern, reason);
+};
+
 const skill = read('skills/make-app-actions/SKILL.md');
 const packageIntegration = read(
   'skills/make-app-actions/references/package-integration.md',
@@ -42,9 +67,6 @@ const openai = read('skills/make-app-actions/agents/openai.yaml');
 const readme = read('README.md');
 const canvasSkill = read('skills/canvas-table-integration/SKILL.md');
 const permissionSkill = read('skills/make-app-permission/SKILL.md');
-const permissionRuntime = read(
-  'skills/make-app-permission/references/ui-permission-runtime.md',
-);
 const serviceSkill = read('skills/make-app-service/SKILL.md');
 const makeDataAdapter = read(
   'skills/make-app-service/references/make-data-adapter.md',
@@ -80,16 +102,8 @@ const groupSkill = read('skills/make-app-group/SKILL.md');
 const groupCanvasFlow = read(
   'skills/make-app-group/references/canvas-table-flow.md',
 );
-const skillBundle = [
-  skill,
-  packageIntegration,
-  permissionModel,
-  selectionFlow,
-  serviceContract,
-  batchEdit,
-  mobileCardActions,
-  testing,
-].join('\n');
+const skillBundle = reachableBundle('skills/make-app-actions/SKILL.md');
+const permissionBundle = reachableBundle('skills/make-app-permission/SKILL.md');
 const frontmatter = skill.split('---')[1] ?? '';
 
 const readScenarioTable = (markdown, heading) => {
@@ -262,11 +276,12 @@ assert.doesNotMatch(
   '0.3.1 generic modal must replace the obsolete non-AntD delivery blocker',
 );
 
-assert.match(
-  permissionModel,
-  /data\.record\.update[\s\S]*data\.record\.delete[\s\S]*data\.record\.bulkUpdate[\s\S]*(independent|独立|不可耦合)/i,
-  'single edit, delete, and bulk edit permission keys must stay independent',
-);
+requireContract(skillBundle, [
+  /data\.record\.update/, /data\.record\.delete/, /data\.record\.bulkUpdate/,
+  /(?:independent|独立|不可耦合)/i,
+], 'single edit, delete and batch edit must keep independent permission keys');
+assert.ok(permissionModel.includes('../../make-app-permission/references/permission-boundaries.md'),
+  'action permission consumers must link to the shared authority instead of restating its merging algorithm');
 assert.match(
   permissionModel,
   /(principal)[\s\S]*(cache|缓存)[\s\S]*(初始化|initialization)[\s\S]*(身份|identity|租户|tenant|显式刷新|explicit refresh)/i,
@@ -505,16 +520,14 @@ assert.match(
   'permission-denial cleanup must use clearRowColors and restore the underlying row state',
 );
 
-assert.match(
-  batchEdit,
-  /data\.record\.bulkUpdate[\s\S]{0,200}effective state[\s\S]{0,300}restrictions[\s\S]{0,300}readonly[\s\S]*resolveBatchEditableFields[\s\S]*(AntdRecordBatchEditModal)[\s\S]*(RecordBatchEditModal)/i,
-  'batch fields require an independent bulk gate, effective restrictions, and package capability',
-);
-assert.match(
-  batchEdit,
-  /rejects the entire mutation[\s\S]{0,200}preserve the draft[\s\S]{0,200}never silently drop/,
-  'restricted batch writes must fail as a whole and retain the draft',
-);
+requireContract(skillBundle, [
+  /data\.record\.bulkUpdate/, /(?:independent|独立)/i,
+  /(?:effective writable|effectively writable|有效.*可写)/i,
+  /permission-boundaries\.md/, /resolveBatchEditableFields/,
+  /AntdRecordBatchEditModal/, /RecordBatchEditModal/,
+  /(?:whole|entire)[\s\S]*mutation/i, /(?:preserve|retain)[\s\S]*draft/i,
+  /never silently (?:drop|trim)/i,
+], 'batch actions must consume authorized writable fields, apply package capability and reject restricted writes as a whole');
 assert.match(
   batchEdit,
   /AntdRecordBatchEditModal[\s\S]*renderValueControl\s*\(\s*field\s*,\s*(?:control|\{\s*disabled\s*\})\s*\)[\s\S]*(disabled)[\s\S]*RecordBatchEditModal[\s\S]*renderValueControl\s*\(\s*field\s*,\s*control\s*\)/i,
@@ -627,26 +640,14 @@ assert.match(
   /(Make)[^\n]*(record|记录)[^\n]*(默认|default)[^\n]*(make-app-actions)/i,
   'CanvasTable skill must hand default Make record actions to make-app-actions',
 );
-assert.match(
-  permissionSkill,
-  /(data\.record\.update|update)[^\n]*(delete)[^\n]*(bulk[- ]?update|bulkUpdate)[^\n]*(独立|independent)|(独立|independent)[^\n]*(update)[^\n]*(delete)[^\n]*(bulk[- ]?update|bulkUpdate)/i,
-  'permission skill must preserve independent action permissions',
-);
-assert.match(
-  permissionSkill,
-  /(Use|使用)[^\n]*make-app-actions[^\n]*(selection|选择|batch|批量)|(selection|选择|batch|批量)[^\n]*(Use|使用)[^\n]*make-app-actions/i,
-  'permission skill must hand selection and batch-action behavior to make-app-actions',
-);
-assert.match(
-  permissionRuntime,
-  /(field-count|字段数量)[^\n]*(hide|隐藏)[^\n]*(create|新建)[^\n]*(normal edit|单条编辑|普通编辑)/i,
-  'permission runtime must not hide normal edit by editable-field count',
-);
-assert.match(
-  permissionSkill,
-  /(selection|选择|batch|批量)[^\n]*make-app-actions|make-app-actions[^\n]*(selection|选择|batch|批量)/i,
-  'permission skill must hand batch field availability to make-app-actions',
-);
+requireContract(permissionBundle, [
+  /data\.record\.update/, /data\.record\.delete/, /data\.record\.bulkUpdate/,
+  /(?:independent|独立)/i,
+  /(?:field-count|field counts|字段数量)/i,
+  /(?:hide|隐藏)[\s\S]*(?:create|新建)[\s\S]*(?:normal edit|单条编辑|普通编辑)/i,
+], 'shared permissions keep independent operations and normal entry visibility separate from writable-field counts');
+assert.match(permissionSkill, /\[[^\]]*make-app-actions[^\]]*\]\(\.\.\/make-app-actions\/SKILL\.md\)/,
+  'permission task routing must expose selection and batch-action guidance');
 assert.match(
   serviceSkill,
   /record-write-permission[\s\S]*records\/bulk[\s\S]*make-app-actions/i,

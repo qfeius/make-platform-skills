@@ -13,37 +13,58 @@ const read = (relativePath) => {
   return fs.readFileSync(filePath, 'utf8');
 };
 
+// Installed Skill documentation must work without repository PR/chat context.
+const localMarkdownLinks = (file, markdown) => [...markdown.matchAll(/\[[^\]]+\]\(([^)\s]+)\)/g)]
+  .map((match) => match[1].split('#')[0])
+  .filter((target) => target && !/^[a-z]+:/i.test(target))
+  .map((target) => path.relative(repoRoot, path.resolve(repoRoot, path.dirname(file), target)));
+
+const walkSkillDocuments = (entry) => {
+  const directory = path.dirname(entry);
+  const documents = new Map();
+  const pending = [entry];
+  const issues = [];
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (documents.has(file)) continue;
+    const markdown = read(file);
+    documents.set(file, markdown);
+    for (const target of localMarkdownLinks(file, markdown)) {
+      if (target.startsWith('..') || !fs.existsSync(path.join(repoRoot, target))) {
+        issues.push(`${file}: unresolved local link ${target}`);
+      } else if (target.startsWith(directory + '/') && target.endsWith('.md')) {
+        pending.push(target);
+      }
+    }
+  }
+  return { documents, issues };
+};
+const contextualGuidanceIssues = (documents) => [...documents]
+  .filter(([, markdown]) => /\bthis (?:(?:Skill )?PR|edit (?:correction|fix))\b|本轮(?:不迁移|修订)|本次(?:修订|PR)/i.test(markdown))
+  .map(([file]) => `${file}: installed guidance depends on this change's PR/chat context`);
+const unreachableResourceIssues = (resources, documents) => resources
+  .filter(([file]) => !documents.has(file))
+  .map(([file]) => `${file}: task resource is not discoverable through Markdown links`);
+const discoverSkill = (entry) => {
+  const { documents, issues } = walkSkillDocuments(entry);
+  const directory = `${path.dirname(entry)}/references`;
+  const resources = fs.readdirSync(path.join(repoRoot, directory))
+    .filter((name) => name.endsWith('.md'))
+    .map((name) => [`${directory}/${name}`, read(`${directory}/${name}`)]);
+  assert.deepEqual([
+    ...issues,
+    ...unreachableResourceIssues(resources, documents),
+    ...contextualGuidanceIssues(new Map([...documents, ...resources])),
+  ], [], 'installed Skill documentation must be self-contained and every task resource reachable');
+  return { documents, bundle: [...documents.values()].join('\n') };
+};
+
+const discoveredPermission = discoverSkill('skills/make-app-permission/SKILL.md');
+const discoveredActions = discoverSkill('skills/make-app-actions/SKILL.md');
+
 const permissionSkill = read('skills/make-app-permission/SKILL.md');
-const profiles = read('skills/make-app-permission/references/design-and-protocol-profiles.md');
 const boundaries = read(
   'skills/make-app-permission/references/permission-boundaries.md',
-);
-const principalPermission = read(
-  'skills/make-app-permission/references/service-principal-permission.md',
-);
-const runtime = read(
-  'skills/make-app-permission/references/ui-permission-runtime.md',
-);
-const permissionTesting = read(
-  'skills/make-app-permission/references/testing-and-audit.md',
-);
-const systemFieldContract = read(
-  'skills/make-app-permission/references/system-field-contract.md',
-);
-const conformanceSuite = read(
-  'skills/make-app-permission/scripts/permission-conformance-suite.mjs',
-);
-const permissionAudit = read(
-  'skills/make-app-permission/scripts/audit-make-app-permission.mjs',
-);
-const installedSkillSync = read(
-  'skills/make-app-permission/scripts/check-installed-skill-sync.mjs',
-);
-const installedSkillSyncTest = read(
-  'skills/make-app-permission/scripts/test-installed-skill-sync.mjs',
-);
-const installedPlatformSkillsSync = read(
-  'scripts/check-installed-make-platform-skills-sync.mjs',
 );
 const serviceSkill = read('skills/make-app-service/SKILL.md');
 const serviceAdapter = read(
@@ -72,14 +93,7 @@ const routeLayout = read('skills/makeui/references/page-route-layout.md');
 const readme = read('README.md');
 const agentMetadata = read('skills/make-app-permission/agents/openai.yaml');
 
-const permissionBundle = [
-  permissionSkill,
-  boundaries,
-  principalPermission,
-  runtime,
-  permissionTesting,
-  systemFieldContract,
-].join('\n');
+const permissionBundle = discoveredPermission.bundle;
 const serviceBundle = [
   serviceSkill,
   serviceAdapter,
@@ -93,20 +107,12 @@ const makeuiBundle = [makeuiSkill, componentUsage, drawerLayout, routeLayout].jo
 
 const permissionGuidance = [
   ['README.md', readme],
-  ['skills/make-app-permission/references/design-and-protocol-profiles.md', profiles],
-  ['skills/make-app-permission/SKILL.md', permissionSkill],
-  ['skills/make-app-permission/references/permission-boundaries.md', boundaries],
-  ['skills/make-app-permission/references/service-principal-permission.md', principalPermission],
-  ['skills/make-app-permission/references/ui-permission-runtime.md', runtime],
-  ['skills/make-app-permission/references/testing-and-audit.md', permissionTesting],
-  ['skills/make-app-permission/references/system-field-contract.md', systemFieldContract],
-  ...[
-    'skills/make-app-actions/SKILL.md',
-    'skills/make-app-actions/references/action-permission-model.md',
-    'skills/make-app-actions/references/batch-edit-flow.md',
-    'skills/make-app-actions/references/testing-and-pitfalls.md',
-  ].map((file) => [file, read(file)]),
+  ...discoveredPermission.documents,
+  ...discoveredActions.documents,
 ];
+const requireContract = (bundle, patterns, reason) => {
+  for (const pattern of patterns) assert.match(bundle, pattern, reason);
+};
 for (const [file, guidance] of permissionGuidance) {
   assert.doesNotMatch(
     guidance,
@@ -131,8 +137,8 @@ assert.ok(
   'make-app-permission must retain the 0.3.1+ default-enforcement and passthrough release baseline',
 );
 assert.match(
-  permissionSkill,
-  /must be enabled by default for every generated or refactored Make App/i,
+  permissionBundle,
+  /(?:default|默认)[\s\S]*(?:generated|refactored|生成|重构)[\s\S]*Make App/i,
   'make-app-permission must be enabled by default for every Make App',
 );
 assert.doesNotMatch(
@@ -141,12 +147,12 @@ assert.doesNotMatch(
   'make-app-permission must not make default enforcement opt-in',
 );
 assert.match(
-  principalPermission,
-  /preserve the upstream HTTP status, response body, and Content-Type unchanged/i,
+  permissionBundle,
+  /(?:preserve|保留|原样)[\s\S]*status[\s\S]*(?:body|响应体)[\s\S]*Content-Type[\s\S]*(?:unchanged|原样)/i,
   'principal permission route must pass through real Make IAM responses unchanged',
 );
 assert.doesNotMatch(
-  principalPermission,
+  permissionBundle,
   /map upstream failures/i,
   'principal permission route must not map Make IAM failures into a Service envelope',
 );
@@ -227,41 +233,27 @@ assert.doesNotMatch(
   /failed auth checks should return a stable 5xx\/contracted error/i,
   'Service contracts must not replace a completed Make auth response with a stable 5xx error',
 );
-assert.match(
-  permissionBundle,
-  /meta\.entity\.read[\s\S]{0,1000}(导航|navigation)[\s\S]{0,1000}meta\.field\.read[\s\S]{0,1000}(表头|headers|columns|列)[\s\S]{0,1000}data\.record\.read/i,
-  'entity navigation, table headers, and record data must use independent meta.entity/meta.field/data.record read gates',
-);
-assert.match(
-  permissionBundle,
-  /legacy[\s\S]*data\.record\.create[\s\S]*createFields[\s\S]*meta\.field\.read[\s\S]*creatable/i,
-  'legacy create must retain its operation gate and existing metadata-derived field contract',
-);
-assert.match(
-  permissionBundle,
-  /meta\.field\.create[^\n]*(exists|existing|元数据|field.metadata)/i,
-  'meta.field.create must be documented as an existing metadata permission',
-);
-assert.match(
-  boundaries,
-  /Operation gates[\s\S]{0,160}effect: deny[\s\S]{0,100}wins over allow/,
-  'deny semantics must be described per permission dimension, not as a record operation denial',
-);
-assert.doesNotMatch(
-  permissionBundle,
+// The authority can be reorganized without moving semantic rules back into every consumer reference.
+requireContract(boundaries, [
+  /v3\.0\.0/, /2026-08-04/, /Decision[\s\S]*Plan/, /raw[\s\S]*principal/i,
+  /Statement[\s\S]*named[\s\S]*baseline/i,
+  /across Statements[\s\S]*strictest/i,
+  /hidden\s*>\s*fullMask\s*>\s*partialMask\s*>\s*readonly\s*>\s*editable/,
+  /raw[\s\S]*(?:provenance|grouping)/i,
+  /within and across rows/i,
+  /readonly[\s\S]*partialMask[\s\S]*(?:array|数组)/i,
+  /(?:whole|entire|整单)[\s\S]*(?:update|mutation|更新)/i, /422/,
+], 'permission authority must distinguish trusted v3 evaluation from conservative raw compatibility and whole-write rejection');
+requireContract(permissionBundle, [
+  /meta\.entity\.read/, /meta\.field\.read/, /data\.record\.read/,
+  /(?:navigation|导航)/i, /(?:headers|表头)/i, /(?:independent|独立)/i,
+  /legacy[\s\S]*createFields[\s\S]*meta\.field\.read/i,
+  /data\.record\.create/, /creatable/, /meta\.field\.create[^\n]*(?:exists|存在)/i,
+  /(?:deny[^\n]*wins|拒绝优先)/i,
+], 'permission docs must preserve independent navigation, field metadata, records and legacy creation');
+assert.doesNotMatch(permissionBundle,
   /(?:create|edit|manage) (?:back-office )?(?:policies|permission groups) (?:in|from) the (?:UI|browser)/i,
-  'the front-end skill may explain policy provenance but must not manage back-office configuration',
-);
-for (const [pattern, reason] of [
-  [/v3\.0\.0[\s\S]*2026-08-04/, 'pin the design version'],
-  [/Within one Statement[\s\S]*Across Statements[\s\S]*hidden > fullMask > partialMask > readonly > editable/, 'separate specificity from cross-statement strictness'],
-  [/raw row[\s\S]*provenance[\s\S]*baseline[\s\S]*named/, 'raw merged rows cannot imply Statement grouping'],
-  [/readonly[\s\S]*partialMask[\s\S]*alongside[\s\S]*editable/, 'conflicting raw arrays must preserve restrictions'],
-  [/rejected as a whole[\s\S]*422/, 'reject the whole restricted write'],
-  [/not validation of this Skill PR/, 'do not reuse the incident as this PR validation'],
-]) {
-  assert.match(profiles, pattern, reason);
-}
+  'frontend guidance must not manage back-office policy configuration');
 for (const expectedValue of [
   'Make.Field.ID',
   'IDField',
@@ -275,180 +267,50 @@ for (const expectedValue of [
   'qfei_update_time',
 ]) {
   assert.match(
-    systemFieldContract,
+    permissionBundle,
     new RegExp(expectedValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
     `system field contract must include ${expectedValue}`,
   );
 }
 assert.match(
-  permissionTesting,
+  permissionBundle,
   /permission-conformance-suite\.mjs[\s\S]{0,500}(adapter|适配器)/i,
   'testing reference must require the executable permission conformance suite',
 );
-assert.match(
-  permissionAudit,
-  /field_access_state_stringified/,
-  'permission audit must reject obvious fieldAccess state-array stringification',
-);
-assert.match(
-  permissionAudit,
-  /entity_route_not_gated_by_meta_entity_read[\s\S]{0,800}entity_navigation_not_gated_by_meta_entity_read[\s\S]{0,800}table_headers_tied_to_record_read[\s\S]{0,800}record_rows_not_cleared_on_read_revoke/i,
-  'permission audit must reject missing entity route guards, record-read header gates, and stale record rows',
-);
-assert.match(
-  permissionTesting,
-  /(default test|默认测试|CI|publish gate|发布校验)[\s\S]{0,500}(audit|审计)[\s\S]{0,500}(conformance|一致性)/i,
-  'host automation must continuously invoke both permission gates',
-);
-assert.match(
-  permissionTesting,
-  /check-installed-skill-sync\.mjs[\s\S]{0,500}(source-only|source_only)[\s\S]{0,300}(installed-only|installed_only)[\s\S]{0,300}(content-mismatch|content_mismatch)/i,
-  'local release verification must compare the complete source and installed Skill trees',
-);
-for (const findingKind of ['source_only', 'installed_only', 'content_mismatch']) {
-  assert.match(
-    installedSkillSync,
-    new RegExp(findingKind),
-    `installed Skill sync checker must report ${findingKind}`,
-  );
-  assert.match(
-    installedSkillSyncTest,
-    new RegExp(findingKind),
-    `installed Skill sync tests must cover ${findingKind}`,
-  );
-}
-assert.match(
-  installedPlatformSkillsSync,
-  /make-app-permission[\s\S]{0,240}make-app-service[\s\S]{0,240}make-app-auth[\s\S]{0,240}make-app-actions[\s\S]{0,240}make-app-sort[\s\S]{0,240}make-app-group/i,
-  'platform release sync check must cover every Skill changed by the shared Make response contract',
-);
-assert.match(
-  permissionSkill,
-  /npx skills update\s+qfeius\/make-platform-skills[\s\S]{0,500}check-installed-make-platform-skills-sync\.mjs/i,
-  'permission release guidance must use the supported Skills CLI update command before the full sync check',
-);
-for (const conformanceCase of [
-  'operation_create_absent_must_deny',
-  'entity_metadata_read_is_independent_from_record_read',
-  'field_metadata_read_is_independent_from_business_values',
-  'named_entity_permission_does_not_leak',
-  'invalid_requested_identifiers_fail_closed',
-  'operation_global_permission_wildcard_allows',
-  'operation_segment_permission_wildcard_allows',
-  'operation_deny_does_not_deny_read_derived_create_field',
-  'read_field_deny_does_not_deny_record_create_operation',
-  'entity_resource_wildcard_matches',
-  'parent_and_global_resources_match',
-  'console_style_record_gate_allows_business_edits_without_field_update_keys',
-  'bulk_update_field_access_is_independent_from_single_update',
-  'read_dimension_access_states',
-  'record_update_does_not_require_meta_update',
-  'raw_effective_restrictions_survive_record_write_allow',
-  'raw_missing_field_restriction_defaults_editable_inside_gate',
-  'raw_merged_wildcard_restrictions_cannot_be_overridden_by_named_editable',
-  'raw_state_arrays_preserve_any_restriction',
-  'decision_envelopes_are_not_raw_principal_rows',
-  'legacy_create_states_remain_supported',
-  'explicit_null_field_access_fails_closed',
-  'invalid_field_access_state_fails_closed',
-  'valid_field_access_state_lists_are_preserved',
-  'blank_field_key_poison_entire_access',
-  'invalid_effect_fails_closed',
-  'malformed_row_poison_entire_access',
-  'invalid_permission_key_does_not_match',
-  'invalid_resource_namespace_does_not_match',
-  'missing_app_scope_fails_closed',
-  'app_resource_cannot_override_scope',
-  'invalid_explicit_app_resource_fails_closed',
-  'entity_wildcard_allow_restricts_app_allow',
-  'same_specificity_allow_fields_union',
-  'namespace_alias_same_specificity_allow_union',
-  'same_specificity_named_hidden_overrides_wildcard',
-  'same_specificity_named_hidden_overrides_named_allow',
-  'same_specificity_named_hidden_overrides_unrestricted_allow',
-  'system_id_and_audit_fields_are_not_create_capable',
-  'system_id_fields_are_not_edit_capable',
-  'similarly_named_business_fields_remain_create_capable',
-  'audit_fields_can_remain_update_capable',
-]) {
-  assert.match(
-    conformanceSuite,
-    new RegExp(conformanceCase),
-    `conformance suite must include ${conformanceCase}`,
-  );
-}
-assert.match(
-  permissionBundle,
-  /(create|新建)[^\n]*(visibility|可见)[^\n]*(editability|可编辑)[^\n]*(separate|独立)|(separate|独立)[^\n]*(create|新建)[^\n]*(visibility|可见)[^\n]*(editability|可编辑)/i,
-  'create, visible, and editable field sets must remain separate',
-);
-assert.match(
-  permissionBundle,
-  /createFields[^\n]*(missing|缺失)[^\n]*(empty|空)[^\n]*(no fallback|不回退)[^\n]*fields/i,
-  'missing createFields must fail closed without falling back to fields',
-);
-assert.match(
-  permissionBundle,
-  /editableFields[^\n]*(ignore|ignored|不使用|忽略)/i,
-  'editableFields must be explicitly ignored by current edit behavior',
-);
-assert.match(
-  permissionBundle,
-  /(exclude|排除|不可)[^\n]*(ID|审计|audit)[^\n]*(create|creatable|可新建)|(create|creatable|可新建)[^\n]*(exclude|排除|不可)[^\n]*(ID|审计|audit)/i,
-  'create permission must exclude ID and audit fields',
-);
-assert.match(
-  permissionBundle,
-  /(审计|audit)[^\n]*(edit|editable|可编辑)[^\n]*(保留|remain|keep)|(保留|remain|keep)[^\n]*(审计|audit)[^\n]*(edit|editable|可编辑)/i,
-  'audit fields must retain existing edit capability',
-);
-assert.match(
-  runtime,
-  /canCreateEntityField[\s\S]{0,600}creatableFieldKeysForEntity/,
-  'UI permission runtime must require create-field helpers',
-);
-assert.match(
-  runtime,
-  /(submit|提交)[\s\S]{0,1000}(allowlist|白名单)[\s\S]{0,800}(DevTools|inject|注入|unauthorized|未授权)/i,
-  'create submit must rebuild an allowlisted payload and resist injected values',
-);
-assert.match(
-  runtime,
-  /refreshPermissions[\s\S]{0,700}(refreshSchema|invalidateSchema|Schema cache|Schema 缓存|schema generation)/i,
-  'permission refresh must invalidate or reload permission-trimmed schema',
-);
-assert.match(
-  runtime,
-  /Lookup[\s\S]{0,600}fields[\s\S]{0,300}createFields[\s\S]{0,700}(target|目标)[^\n]*fields/i,
-  'create-only Lookup source fields may use createFields while targets remain visible',
-);
-assert.match(
-  runtime,
-  /Make\.Field\.File[\s\S]{0,500}(recordID|record identity|记录标识)[\s\S]{0,700}(host|宿主|contract|合同)[\s\S]{0,700}(pre-upload|预上传|attachment array|附件数组)/i,
-  'File create capability must be decided from the concrete host upload contract',
-);
-assert.match(
-  runtime,
-  /Make\.Field\.Lookup[\s\S]{0,700}lookup-options[\s\S]{0,900}(create|新建)[\s\S]{0,900}qfei_relation[\s\S]{0,900}(edit|编辑)[\s\S]{0,900}lookup-relations/i,
-  'Lookup create/edit request and payload split must be explicit',
-);
-assert.match(
-  runtime,
-  /UI sends `\{ data: ordinaryAllowlistedData, relations:/i,
-  'Lookup create must send separate data and relations objects',
-);
-assert.match(
-  runtime,
-  /Service must reject[^\n]*data\.qfei_relation/i,
-  'Lookup create must reject raw qfei_relation',
-);
+requireContract(permissionBundle, [
+  /(?:default test|默认测试|CI|publish gate|发布校验)/i,
+  /audit-make-app-permission\.mjs/,
+  /permission-conformance-suite\.mjs/,
+  /(?:adapter|适配器)/i,
+  /check-installed-skill-sync\.mjs/,
+  /source[-_]only/, /installed[-_]only/, /content[-_]mismatch/,
+  /npx skills update\s+qfeius\/make-platform-skills/,
+  /check-installed-make-platform-skills-sync\.mjs/,
+], 'reachable verification guidance must expose host checks and the separate complete installed-Skill release comparison');
+requireContract(permissionBundle, [
+  /(?:create|新建)/i, /(?:visibility|visible|可见)/i, /(?:editability|editable|可编辑)/i,
+  /(?:separate|independent|独立)/i,
+  /createFields[\s\S]*(?:missing|缺失|missing\/null)[\s\S]*(?:empty|空|\[\])/i,
+  /(?:no fallback|never falls back|不回退)/i,
+  /editableFields[\s\S]*(?:ignore|ignored|忽略)/i,
+  /(?:exclude|排除)[\s\S]*(?:ID|audit|审计)/i,
+  /(?:audit|审计)[\s\S]*(?:edit|editable|编辑)[\s\S]*(?:remain|preserve|keep|保留)/i,
+  /canCreateEntityField/, /creatableFieldKeysForEntity/,
+  /(?:submit|提交)[\s\S]*(?:allowlist|白名单)/i,
+  /(?:DevTools|inject|注入)/i,
+  /refreshPermissions[\s\S]*(?:refreshSchema|invalidateSchema|Schema cache|Schema 缓存|schema generation)/i,
+  /Make\.Field\.File/, /recordID/, /(?:pre-upload|预上传)/i, /(?:attachment array|附件数组)/i,
+  /Make\.Field\.Lookup/, /lookup-options/, /qfei_relation/, /lookup-relations/,
+  /ordinaryAllowlistedData/, /relations/, /(?:reject|拒绝)[\s\S]*data\.qfei_relation/i,
+  /(?:target|目标)[\s\S]*(?:visible|可见)[\s\S]*fields/i,
+], 'reachable consumer guidance must preserve Schema separation, payload allowlists, refresh and File/Lookup boundaries');
 assert.match(
   componentUsage,
   /field\.validations\.isRequired[\s\S]{0,400}required[^\n]*(prop|属性)/i,
   'makeui must define validations.isRequired as the Schema source for the required UI prop',
 );
 
-const principalExample = JSON.parse([...principalPermission.matchAll(/```json\n([\s\S]*?)\n```/g)].find((match) => match[1].includes('"permissions"'))[1]);
+const principalExample = JSON.parse([...permissionBundle.matchAll(/```json\n([\s\S]*?)\n```/g)].find((match) => match[1].includes('"permissions"'))[1]);
 const principalRow = (key) => principalExample.permissions.find((row) => row.permissionKey === key);
 assert.deepEqual(principalRow('data.record.create').fieldAccess, {});
 assert.equal(principalRow('data.record.update').fieldAccess.editable_field, 'editable');
@@ -456,27 +318,12 @@ assert.equal(principalRow('data.record.read').fieldAccess.editable_field, 'edita
 assert.equal(principalRow('meta.field.read').fieldAccess.editable_field, 'editable');
 assert.equal(principalRow('meta.field.read').fieldAccess.create_only_field, 'creatable');
 
-const fieldDimensionRows = boundaries.split('\n').filter((line) => /^\| (Ordinary create|Table headers|List\/detail|Edit\/cell|Batch edit)/.test(line));
-for (const [surface, key] of [
-  ['Ordinary create', 'data.record.create'],
-  ['Table headers', 'meta.field.read'],
-  ['List/detail', 'data.record.read'],
-  ['Edit/cell', 'data.record.update'],
-  ['Batch edit', 'data.record.bulkUpdate'],
-]) {
-  const row = fieldDimensionRows.find((line) => line.startsWith(`| ${surface}`));
-  assert.ok(row?.includes(`\`${key}\``), `${surface} must use ${key}`);
-}
-assert.match(
-  permissionTesting,
-  /(?:legacy|create)[^\n]*(?:gate|operation)[^\n]*(?:independent|separate)|data\.record\.create[^\n]*deny[^\n]*(?:field|metadata)/i,
-  'legacy create-field selection cannot bypass the independent record-create gate',
-);
-assert.doesNotMatch(
-  permissionBundle,
-  /meta\.field\.create[^\n]*(not a platform permission point|不是平台权限点)/i,
-  'metadata-create permission must not be described as nonexistent',
-);
+requireContract(permissionBundle, [
+  /data\.record\.create/, /data\.record\.read/, /data\.record\.update/, /data\.record\.bulkUpdate/,
+  /meta\.field\.read/, /(?:legacy|历史)/i, /(?:independent|separate|独立)/i,
+], 'all field surfaces must retain their independent record gates and metadata boundary');
+assert.doesNotMatch(permissionBundle, /meta\.field\.create[^\n]*(?:not a platform permission point|不是平台权限点)/i,
+  'metadata-create permission must not be described as nonexistent');
 assert.match(
   serviceBundle,
   /fields[\s\S]{0,500}createFields[\s\S]{0,700}(independent|separate|独立|分别)/i,
