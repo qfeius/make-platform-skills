@@ -33,8 +33,12 @@ edit for multiple selection. Having `data.record.update` without
 `data.record.bulkUpdate` must not expose batch edit. Delete never implies either
 update permission.
 
-Use `meta.field.read` for field visibility and `meta.field.update` for field
-editability. Do not use field counts to infer record-operation permission.
+Use `meta.field.read` for field-definition/table-header visibility and
+`data.record.read.fieldAccess` for business-value visibility. Single-edit fields
+use `data.record.update.fieldAccess(editable|*)`; batch fields independently use
+`data.record.bulkUpdate.fieldAccess(editable|*)`. Metadata-write permissions such
+as `meta.field.update` edit field definitions and grant no business-value edits.
+Do not use field counts to infer record-operation permission.
 
 ## Action state
 

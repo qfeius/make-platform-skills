@@ -80,19 +80,25 @@ Preserve the stable IAM response envelope and select/normalize App permission ro
       "permissionKey": "data.record.create",
       "resource": "make://<tenantId>/*/app/<appKey>/entity/<entityKey>",
       "effect": "allow",
-      "fieldAccess": {}
+      "fieldAccess": { "create_only_field": "creatable" }
     },
     {
       "permissionKey": "meta.field.read",
       "resource": "make://<tenantId>/*/app/<appKey>/entity/<entityKey>",
       "effect": "allow",
       "fieldAccess": {
-        "create_only_field": "creatable",
-        "visible_field": "readonly"
+        "visible_field": "readonly",
+        "editable_field": "readonly"
       }
     },
     {
-      "permissionKey": "meta.field.update",
+      "permissionKey": "data.record.read",
+      "resource": "make://<tenantId>/*/app/<appKey>/entity/<entityKey>",
+      "effect": "allow",
+      "fieldAccess": { "visible_field": "readonly", "editable_field": "readonly" }
+    },
+    {
+      "permissionKey": "data.record.update",
       "resource": "make://<tenantId>/*/app/<appKey>/entity/<entityKey>",
       "effect": "allow",
       "fieldAccess": {
@@ -106,14 +112,15 @@ Preserve the stable IAM response envelope and select/normalize App permission ro
 Consume `fieldAccess` by permission dimension:
 
 - `meta.entity.read`: entity metadata permission only; use it to include a Schema-present entity in navigation and allow its object route. It does not grant field visibility or record values.
-- `data.record.read`: record-data permission only; use it for list/detail/pagination requests and record rows. It must not remove `meta.field.read` headers when an entity remains metadata-readable.
-- `data.record.create`: operation permission only; use it for create route, entry, handler, and submit checks, never to choose fields.
-- `meta.field.read`: for ordinary create, use `creatable|readonly|editable|partialMask|fullMask|*` to choose fields from Schema `createFields`; approval create uses Workflow start-config field authorization instead. Use readable states to choose visible fields from Schema `fields`; `creatable` is ordinary-create-only, not readable.
-- `meta.field.create` is not a platform permission point. Do not require it, synthesize it, or use it as a create-field fallback.
-- `meta.field.update`: use `editable` or `*` only after visibility is established.
-- All `data.record.*` rows control operations and do not grant create/read/update field access. In particular, `data.record.create.fieldAccess` must not be used as the create-field dimension.
+- `meta.field.read`: field-definition/Schema/table-header visibility only. It never grants record values or business writes.
+- `meta.field.create/update/delete`: existing field-metadata permissions for creating/updating/deleting field definitions. They do not authorize new records or record-field value changes; ordinary App data helpers need not consume them.
+- `data.record.read`: authorize list/detail/pagination operations and apply its `fieldAccess` readable states to business values inside the metadata-visible Schema field set. Preserve masked states. It must not remove metadata-authorized headers when record access is denied.
+- `data.record.create`: authorize create route/entry/handler/submit and intersect its `fieldAccess(creatable|*)` with `createFields` for ordinary create. Approval create uses Workflow start-config field authorization instead, retaining its operation gate.
+- `data.record.update`: single-edit operation and `fieldAccess(editable|*)` for already-readable business-value fields.
+- `data.record.bulkUpdate`: independent batch-edit operation and its own `fieldAccess(editable|*)`; never borrow `data.record.update` field authorization.
+- Operation and field evaluation share the matching record permission decision, but remain separate checks: an operation allow cannot bypass a named field restriction or the relevant Schema upper bound.
 
-An allow row with empty `fieldAccess` is unrestricted for that permissionKey at its resolved resource specificity. A matching deny wins. Named field entries override a wildcard field baseline.
+In this App-scoped principal snapshot, an allow row with empty `fieldAccess` is unrestricted for that permissionKey at its resolved resource specificity. A matching deny wins. Named field entries override a wildcard field baseline. This principal-snapshot convention does not imply that an empty final Data API write decision allows submitted fields; the backend remains the final authority.
 
 Do not make the UI readiness transition depend on every row returned by IAM. Apply the deterministic selection table in `permission-boundaries.md` before strict row validation: only clearly unrelated rows may be ignored, while selected and unclassifiable rows fail closed. Ignored rows must never grant or deny App access or block the subsequent Schema request. Keep the Service request App-scoped; local response selection is not a reason to add a tenant-root scope or upstream platform permission filter.
 

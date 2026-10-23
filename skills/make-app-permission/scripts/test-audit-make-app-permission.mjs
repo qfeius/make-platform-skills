@@ -10,6 +10,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const auditScript = path.join(scriptDir, 'audit-make-app-permission.mjs');
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'make-app-permission-audit-'));
 const goodFiles = {};
+let auditCaseCount = 0;
 
 try {
   const goodRoot = createFixture('good-app', {
@@ -34,14 +35,14 @@ try {
         return states.filter((state) => typeof state === 'string').map((state) => state.trim());
       }
       function evaluateField(access, entityKey, fieldKey, permissionKey) {
-        const fieldAccess = access?.permissions?.[0]?.fieldAccess ?? {};
+        const fieldAccess = (access?.permissions ?? []).find((permission) => permission.permissionKey === permissionKey)?.fieldAccess ?? {};
         const states = normalizeFieldAccessStates(fieldAccess[fieldKey]);
         return Boolean(entityKey && permissionKey && states.length > 0);
       }
       export function canUseEntityOperation(access, entityKey, permissionKey) { return evaluateOperation(access, entityKey, permissionKey); }
-      export function canCreateEntityField(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, META_FIELD_READ); }
-      export function canReadEntityField(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, META_FIELD_READ); }
-      export function canUpdateEntityField(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, META_FIELD_UPDATE); }
+      export function canCreateEntityField(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, DATA_RECORD_CREATE); }
+      export function canReadEntityField(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, DATA_RECORD_READ); }
+      export function canUpdateEntityField(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, DATA_RECORD_UPDATE); }
       export function creatableFieldKeysForEntity(access, entityKey, fields) { return new Set(fields.map((field) => field.key)); }
       export function visibleFieldsForEntity(access, entityKey, fields) { return fields; }
       export function editableFieldKeysForEntity() { return new Set(['name']); }
@@ -592,9 +593,9 @@ try {
     app: goodFiles.app,
     permissionModel: goodFiles.permissionModel
       .replace('return evaluateOperation(access, entityKey, permissionKey);', 'return true;')
-      .replace('export function canCreateEntityField(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, META_FIELD_READ); }', 'export function canCreateEntityField() { return true; }')
-      .replace('return evaluateField(access, entityKey, fieldKey, META_FIELD_READ);', 'return true;')
-      .replace('return evaluateField(access, entityKey, fieldKey, META_FIELD_UPDATE);', 'return true;'),
+      .replace('export function canCreateEntityField(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, DATA_RECORD_CREATE); }', 'export function canCreateEntityField() { return true; }')
+      .replace('return evaluateField(access, entityKey, fieldKey, DATA_RECORD_READ);', 'return true;')
+      .replace('return evaluateField(access, entityKey, fieldKey, DATA_RECORD_UPDATE);', 'return true;'),
     router: goodFiles.router,
     page: goodFiles.page,
     api: goodFiles.api,
@@ -968,7 +969,7 @@ try {
   const missingCreateFieldHelperRoot = createFixture('missing-create-field-helper', {
     app: goodFiles.app,
     permissionModel: goodFiles.permissionModel
-      .replace('export function canCreateEntityField(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, META_FIELD_READ); }', '')
+      .replace('export function canCreateEntityField(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, DATA_RECORD_CREATE); }', '')
       .replace('export function creatableFieldKeysForEntity(access, entityKey, fields) { return new Set(fields.map((field) => field.key)); }', ''),
     router: goodFiles.router,
     page: goodFiles.page
@@ -984,37 +985,83 @@ try {
     /create_field_permission_helper_missing/,
   );
 
-  const createFieldHelperUsesRecordOperationRoot = createFixture('create-helper-uses-record-operation', {
-    app: goodFiles.app,
-    permissionModel: goodFiles.permissionModel.replace(
-      'export function canCreateEntityField(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, META_FIELD_READ); }',
-      'export function canCreateEntityField(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, DATA_RECORD_CREATE); }',
-    ),
-    router: goodFiles.router,
-    page: goodFiles.page,
-    api: goodFiles.api,
-    service: goodFiles.service,
+  for (const [operation, functionName, recordConstant, metadataKey] of [
+    ['create', 'canCreateEntityField', 'DATA_RECORD_CREATE', 'meta.field.read'],
+    ['create-metadata-create', 'canCreateEntityField', 'DATA_RECORD_CREATE', 'meta.field.create'],
+    ['read', 'canReadEntityField', 'DATA_RECORD_READ', 'meta.field.read'],
+    ['update', 'canUpdateEntityField', 'DATA_RECORD_UPDATE', 'meta.field.update'],
+  ]) {
+    const metadataOnlyRoot = createFixture(`metadata-only-business-field-${operation}`, {
+      ...goodFiles,
+      permissionModel: goodFiles.permissionModel.replace(
+        `export function ${functionName}(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, ${recordConstant}); }`,
+        `export function ${functionName}(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, '${metadataKey}'); }`,
+      ),
+    });
+    assert.match(
+      runAudit(metadataOnlyRoot, { expectFailure: true }),
+      /field_permission_uses_metadata_dimension/,
+      `${metadataKey} must not grant business record field access`,
+    );
+  }
+
+  for (const [operation, functionName, expectedKey, wrongKey] of [
+    ['create', 'canCreateEntityField', 'DATA_RECORD_CREATE', 'DATA_RECORD_READ'],
+    ['read', 'canReadEntityField', 'DATA_RECORD_READ', 'DATA_RECORD_CREATE'],
+    ['update', 'canUpdateEntityField', 'DATA_RECORD_UPDATE', 'DATA_RECORD_CREATE'],
+  ]) {
+    const wrongRecordDecisionRoot = createFixture(`wrong-record-decision-${operation}`, {
+      ...goodFiles,
+      permissionModel: goodFiles.permissionModel.replace(
+        `export function ${functionName}(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, ${expectedKey}); }`,
+        `export function ${functionName}(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, ${wrongKey}); }`,
+      ),
+    });
+    assert.match(
+      runAudit(wrongRecordDecisionRoot, { expectFailure: true }),
+      /field_permission_key_missing/,
+      `${functionName} must use its own record operation decision`,
+    );
+  }
+
+  for (const permissionKey of ['META_FIELD_READ', 'DATA_RECORD_READ']) {
+    const metadataVisibilityRoot = createFixture(`metadata-visibility-${permissionKey}`, {
+      ...goodFiles,
+      permissionModel: `${goodFiles.permissionModel}
+        export function canReadEntityFieldMetadata(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, ${permissionKey}); }
+      `,
+    });
+    assert.match(
+      runAudit(metadataVisibilityRoot, { expectFailure: permissionKey !== 'META_FIELD_READ' }),
+      permissionKey === 'META_FIELD_READ' ? /status: PASS/ : /field_metadata_permission_key_missing/,
+      'schema and table header visibility remains a metadata permission decision',
+    );
+  }
+
+  const metadataEditingPermissionNotRequiredRoot = createFixture('metadata-edit-permission-not-required', {
+    ...goodFiles,
+    permissionModel: goodFiles.permissionModel.replace("export const META_FIELD_UPDATE = 'meta.field.update';", ''),
   });
   assert.match(
-    runAudit(createFieldHelperUsesRecordOperationRoot, { expectFailure: true }),
-    /create_field_permission_uses_record_operation/,
+    runAudit(metadataEditingPermissionNotRequiredRoot),
+    /status: PASS/,
+    'business field editing does not require a metadata editing permission',
   );
 
-  const createFieldHelperUsesLegacyMetaCreateRoot = createFixture('create-helper-uses-legacy-meta-create', {
-    app: goodFiles.app,
-    permissionModel: goodFiles.permissionModel.replace(
-      'export function canCreateEntityField(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, META_FIELD_READ); }',
-      "export function canCreateEntityField(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, 'meta.field.create'); }",
-    ),
-    router: goodFiles.router,
-    page: goodFiles.page,
-    api: goodFiles.api,
-    service: goodFiles.service,
-  });
-  assert.match(
-    runAudit(createFieldHelperUsesLegacyMetaCreateRoot, { expectFailure: true }),
-    /create_field_permission_uses_wrong_field_dimension/,
-  );
+  for (const permissionKey of ['DATA_RECORD_BULK_UPDATE', 'META_FIELD_UPDATE', 'DATA_RECORD_UPDATE']) {
+    const bulkFieldRoot = createFixture(`bulk-field-${permissionKey}`, {
+      ...goodFiles,
+      permissionModel: `${goodFiles.permissionModel}
+        export const DATA_RECORD_BULK_UPDATE = 'data.record.bulkUpdate';
+        export function canBulkUpdateEntityField(access, entityKey, fieldKey) { return evaluateField(access, entityKey, fieldKey, ${permissionKey}); }
+      `,
+    });
+    assert.match(
+      runAudit(bulkFieldRoot, { expectFailure: permissionKey !== 'DATA_RECORD_BULK_UPDATE' }),
+      permissionKey === 'DATA_RECORD_BULK_UPDATE' ? /status: PASS/ : /field_permission_(?:key_missing|uses_metadata_dimension)/,
+      'batch record field writes must use the bulkUpdate decision',
+    );
+  }
 
   const editableFieldsCreateRoot = createFixture('editable-fields-create', {
     app: goodFiles.app,
@@ -1182,7 +1229,7 @@ try {
     api: goodFiles.api,
     service: goodFiles.service,
   });
-  assert.match(runAudit(fieldTiedToDataRecordRoot, { expectFailure: true }), /field_permission_tied_to_data_record/);
+  assert.match(runAudit(fieldTiedToDataRecordRoot), /status: PASS/, 'explicit data.record.update is valid for editable record fields');
 
   const editDependsOnEditableFieldsRoot = createFixture('edit-depends-on-editable-fields', {
     app: goodFiles.app,
@@ -1304,7 +1351,7 @@ try {
   });
   assert.match(runAudit(batchEditDependsOnEditableFieldsRoot), /status: PASS/);
 
-  console.log('audit-make-app-permission tests: PASS');
+  console.log(`audit-make-app-permission tests: PASS (${auditCaseCount} audit cases)`);
 } finally {
   fs.rmSync(tempRoot, { force: true, recursive: true });
 }
@@ -1339,6 +1386,7 @@ function write(file, text) {
 }
 
 function runAudit(root, { expectFailure = false } = {}) {
+  auditCaseCount += 1;
   try {
     const output = execFileSync(process.execPath, [auditScript, root], { encoding: 'utf8' });
     if (expectFailure) {

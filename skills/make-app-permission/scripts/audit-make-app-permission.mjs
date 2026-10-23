@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// make-app-permission contract version: 0.2.9
+// make-app-permission contract version: 0.3.5
 import fs from 'node:fs';
 import path from 'node:path';
 
 const USAGE = `Usage:
   node skills/make-app-permission/scripts/audit-make-app-permission.mjs <project-root>
 
-Checks Make App single-app permission enforcement, including create operations and read-derived create fields. This is a static contract audit; it does not replace Service/UI tests.`;
+Checks Make App single-app permission enforcement, including record operation fieldAccess and schema-derived create fields. This is a static contract audit; it does not replace Service/UI tests.`;
 
 const args = process.argv.slice(2);
 if (args.includes('--help') || args.includes('-h')) {
@@ -152,26 +152,24 @@ function checkUiContract() {
   if (!/meta\.entity\.read/.test(uiRuntimeText)) {
     failures.push('entity_metadata_permission_key_missing: UI permission model must include meta.entity.read for entity navigation and routes');
   }
-  for (const key of ['read', 'update']) {
-    if (!new RegExp(`meta\\.field\\.${key}`).test(uiRuntimeText)) {
-      failures.push(`field_permission_key_missing_${key}: UI permission model must include meta.field.${key}`);
-    }
+  if (!/meta\.field\.read/.test(uiRuntimeText)) {
+    failures.push('field_metadata_permission_key_missing: UI must include meta.field.read for schema fields and table headers');
   }
 
   if (!/(canUseEntityOperation|canUse.*Operation|has.*Permission)/.test(uiRuntimeText)) {
     failures.push('operation_helper_missing: UI must have a helper to evaluate entity operation permission');
   }
-  if (!/(canReadEntityField|visibleFieldsForEntity|visibleFieldKeys|META_FIELD_READ|meta\.field\.read)/.test(uiRuntimeText)) {
-    failures.push('field_visibility_helper_missing: UI must evaluate field visibility from meta.field.read');
+  if (!/(canReadEntityField|readableFieldKeysForEntity)/.test(uiRuntimeText)) {
+    failures.push('field_visibility_helper_missing: UI must evaluate record field values from data.record.read fieldAccess');
   }
-  if (!/(canUpdateEntityField|editableFieldKeysForEntity|editableFieldNames|META_FIELD_UPDATE|meta\.field\.update)/.test(uiRuntimeText)) {
-    failures.push('field_edit_helper_missing: UI must evaluate field editability from meta.field.update');
+  if (!/(canUpdateEntityField|editableFieldKeysForEntity|editableFieldNames)/.test(uiRuntimeText)) {
+    failures.push('field_edit_helper_missing: UI must evaluate record field editability from data.record.update fieldAccess');
   }
   if (!/(canCreateEntityField|creatableFieldKeysForEntity)/.test(uiRuntimeText)) {
-    failures.push('create_field_permission_helper_missing: UI must evaluate create fields from meta.field.read fieldAccess');
+    failures.push('create_field_permission_helper_missing: UI must evaluate create fields from data.record.create fieldAccess');
   }
   if (
-    ['canUseEntityOperation', 'canCreateEntityField', 'canReadEntityField', 'canUpdateEntityField']
+    ['canUseEntityOperation', 'canCreateEntityField', 'canReadEntityField', 'canUpdateEntityField', 'canBulkUpdateEntityField']
       .some((functionName) => namedFunctionAlwaysReturnsTrue(uiRuntimeText, functionName))
   ) {
     failures.push('permission_helper_unconditional_allow: permission helpers must evaluate current access instead of returning true unconditionally');
@@ -182,26 +180,29 @@ function checkUiContract() {
       `field_access_state_stringified: preserve fieldAccess state arrays instead of coercing them to text (${stringificationFiles.join(', ')})`,
     );
   }
-  if (!namedFunctionUsesPermissionKey(
-    uiRuntimeText,
-    'canCreateEntityField',
-    /(?:META_FIELD_READ|meta\.field\.read)/,
-  )) {
-    failures.push('create_field_permission_key_missing: create-field permission must use meta.field.read');
+  for (const [functionName, permissionKeyPattern, permissionKey, required] of [
+    ['canCreateEntityField', /(?:DATA_RECORD_CREATE|data\.record\.create)/, 'data.record.create', true],
+    ['canReadEntityField', /(?:DATA_RECORD_READ|data\.record\.read)/, 'data.record.read', false],
+    ['canUpdateEntityField', /(?:DATA_RECORD_UPDATE|data\.record\.update)/, 'data.record.update', false],
+    ['canBulkUpdateEntityField', /(?:DATA_RECORD_BULK_UPDATE|data\.record\.bulkUpdate)/, 'data.record.bulkUpdate', false],
+  ]) {
+    const functionSources = extractNamedFunctionSources(uiRuntimeText, functionName);
+    if ((required || functionSources.length > 0) && !namedFunctionUsesPermissionKey(uiRuntimeText, functionName, permissionKeyPattern)) {
+      failures.push(`field_permission_key_missing: ${functionName} must use ${permissionKey} fieldAccess`);
+    }
+    if (namedFunctionUsesPermissionKey(
+      uiRuntimeText,
+      functionName,
+      /(?:META_FIELD_(?:CREATE|READ|UPDATE)|meta\.field\.(?:create|read|update))/,
+    )) {
+      failures.push(`field_permission_uses_metadata_dimension: ${functionName} must not grant record field access from meta.field.*`);
+    }
   }
-  if (namedFunctionUsesPermissionKey(
-    uiRuntimeText,
-    'canCreateEntityField',
-    /(?:DATA_RECORD_CREATE|data\.record\.create)/,
-  )) {
-    failures.push('create_field_permission_uses_record_operation: create-field permission must not use data.record.create');
-  }
-  if (namedFunctionUsesPermissionKey(
-    uiRuntimeText,
-    'canCreateEntityField',
-    /(?:META_FIELD_(?:CREATE|UPDATE)|meta\.field\.(?:create|update))/,
-  )) {
-    failures.push('create_field_permission_uses_wrong_field_dimension: create-field permission must use meta.field.read, not meta.field.create/update');
+  if (
+    extractNamedFunctionSources(uiRuntimeText, 'canReadEntityFieldMetadata').length > 0
+    && !namedFunctionUsesPermissionKey(uiRuntimeText, 'canReadEntityFieldMetadata', /(?:META_FIELD_READ|meta\.field\.read)/)
+  ) {
+    failures.push('field_metadata_permission_key_missing: canReadEntityFieldMetadata must use meta.field.read for schema fields and table headers');
   }
   if (!/createFields/.test(uiRuntimeText)) {
     failures.push('create_fields_contract_missing: UI schema and create form must preserve and consume createFields');
@@ -217,9 +218,6 @@ function checkUiContract() {
   }
   if (/\btarget\w*(?:Display)?Fields\s*=\s*[^;\n]*\bcreateFields\b/i.test(uiRuntimeText)) {
     failures.push('lookup_target_uses_create_fields: Lookup target display fields must come from visible fields, not target createFields');
-  }
-  if (/(?:canEditEntityField|editableFieldKeysForEntity|editableFieldNames)\s*\([\s\S]{0,180}(?:DATA_RECORD_CREATE|DATA_RECORD_UPDATE|data\.record\.(?:create|update))/.test(uiRuntimeText)) {
-    failures.push('field_permission_tied_to_data_record: field visibility/editability must use meta.field.*, not data.record.create/update');
   }
   if (hasRecordEntryEditableFieldCountGate(uiRuntimeText, {
     actionKeyPattern: '(?:create|new)',
