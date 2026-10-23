@@ -160,13 +160,13 @@ function checkUiContract() {
     failures.push('operation_helper_missing: UI must have a helper to evaluate entity operation permission');
   }
   if (!/(canReadEntityField|readableFieldKeysForEntity)/.test(uiRuntimeText)) {
-    failures.push('field_visibility_helper_missing: UI must evaluate record field values from data.record.read fieldAccess');
+    failures.push('field_visibility_helper_missing: UI must evaluate record field values from the fieldAccess property of matched data.record.read results');
   }
   if (!/(canUpdateEntityField|editableFieldKeysForEntity|editableFieldNames)/.test(uiRuntimeText)) {
-    failures.push('field_edit_helper_missing: UI must evaluate record field editability from data.record.update fieldAccess');
+    failures.push('field_edit_helper_missing: UI must evaluate record field editability from the fieldAccess property of matched data.record.update results');
   }
   if (!/(canCreateEntityField|creatableFieldKeysForEntity)/.test(uiRuntimeText)) {
-    failures.push('create_field_permission_helper_missing: UI must evaluate create fields from data.record.create fieldAccess');
+    failures.push('create_field_permission_helper_missing: UI must evaluate create fields from the fieldAccess property of matched data.record.create results');
   }
   if (
     ['canUseEntityOperation', 'canCreateEntityField', 'canReadEntityField', 'canUpdateEntityField', 'canBulkUpdateEntityField']
@@ -188,7 +188,7 @@ function checkUiContract() {
   ]) {
     const functionSources = extractNamedFunctionSources(uiRuntimeText, functionName);
     if ((required || functionSources.length > 0) && !namedFunctionUsesPermissionKey(uiRuntimeText, functionName, permissionKeyPattern)) {
-      failures.push(`field_permission_key_missing: ${functionName} must use ${permissionKey} fieldAccess`);
+      failures.push(`field_permission_key_missing: ${functionName} must evaluate fieldAccess on the matched ${permissionKey} permission result`);
     }
     if (namedFunctionUsesPermissionKey(
       uiRuntimeText,

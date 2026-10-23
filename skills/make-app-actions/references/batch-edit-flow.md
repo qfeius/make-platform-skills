@@ -61,7 +61,7 @@ Apply this order:
 
 Build batch candidates from runtime normalized schema:
 
-1. Keep metadata-visible (`meta.field.read`) and business-readable (`data.record.read.fieldAccess`) fields allowed by `data.record.bulkUpdate.fieldAccess(editable|*)`. Do not borrow single-update field grants.
+1. Keep fields visible under `meta.field.read` and readable under the matched `data.record.read` permission result's `fieldAccess` property. Then require `editable` or `*` in the `fieldAccess` property of the independently matched `data.record.bulkUpdate` permission result. Do not borrow single-update field grants.
 2. Pass those fields to `resolveBatchEditableFields`.
 3. Exclude readonly/derived Lookup fields or any field the installed package
    reports unsupported.
@@ -148,8 +148,9 @@ into the host.
 ## Submit lifecycle
 
 1. Acquire a single-submit lock; duplicate confirm clicks do nothing.
-2. Recheck the current cached `data.record.bulkUpdate` and target field
-   `data.record.bulkUpdate.fieldAccess(editable|*)` plus current metadata/value visibility without refetching principal.
+2. Recheck the current cached `data.record.bulkUpdate` permission. Confirm that
+   the target field has `editable` or `*` in the matched result's `fieldAccess`
+   property and retains metadata/value visibility, without refetching principal.
 3. Re-resolve current field capability and validate the normalized value.
 4. Build `data`/`relations` using the host's existing field mutation builders.
 5. Reuse the frozen prechecked target exactly and call one Service bulk route.

@@ -29,7 +29,7 @@ Validate the response envelope and derive the current App from `scope` first. Th
 | Missing, malformed, arbitrary-namespace, or wildcard-tenant/App resource | Any key | Unclassifiable: select and fail closed. |
 | Null, primitive, or array row | N/A | Unclassifiable: select and fail closed. |
 
-Supported decisions are `data.record.read`, `data.record.create`, `data.record.update`, `data.record.bulkUpdate`, `data.record.delete`, `meta.entity.read`, and `meta.field.read`. Metadata writes such as `meta.field.create/update/delete` exist but are outside this business App helper set. A valid wildcard is supported only when it matches at least one item in that list; `*.*.*` is therefore supported. Unknown decisions are not future-proof grants: when a new business decision is introduced, update this list, its matching helper, and the conformance cases together.
+Supported decisions are `data.record.read`, `data.record.create`, `data.record.update`, `data.record.bulkUpdate`, `data.record.delete`, `meta.entity.read`, and `meta.field.read`. Metadata writes such as `meta.field.create`, `meta.field.update`, and `meta.field.delete` exist but are outside this business App helper set. A valid wildcard is supported only when it matches at least one item in that list; `*.*.*` is therefore supported. Unknown decisions are not future-proof grants: when a new business decision is introduced, update this list, its matching helper, and the conformance cases together.
 
 This local response tolerance does not alter the upstream query: Service still requests only the exact App scope and no platform permission filter. IAM should correct surplus response rows separately.
 
@@ -87,9 +87,9 @@ For an entity that has `meta.entity.read` and readable fields but lacks `data.re
 
 以下新建字段维度与交集描述普通无有效审批配置的场景。审批新建按 [审批发起合同](../../make-app-approval/references/initiation-contract.md) 使用启动配置的 `readable/editable`；不再与这里的 `createFields`/IAM 字段集合求交。对象与操作权限、普通列表/详情字段和已有记录编辑仍遵守本文件。
 
-Metadata access and business-value access are separate decisions. `meta.field.read/create/update/delete` read/create/update/delete field definitions; `meta.field.update` does not edit a record's field value. `meta.field.create` exists, but does not authorize new business records.
+Metadata access and business-value access are separate decisions. `meta.field.read`, `meta.field.create`, `meta.field.update`, and `meta.field.delete` read/create/update/delete field definitions; `meta.field.update` does not edit a record's field value. `meta.field.create` exists, but does not authorize new business records.
 
-| Surface | Schema upper bound | permissionKey | Allowed access states |
+| Surface | Schema upper bound | permissionKey | Allowed `fieldAccess` states |
 | --- | --- | --- | --- |
 | Create form | `createFields` | `data.record.create` | `creatable`, `*` |
 | Table headers / field definitions | `fields` | `meta.field.read` | `readonly`, `editable`, `partialMask`, `fullMask`, `*` |
@@ -102,7 +102,7 @@ Therefore:
 - A matched `data.record.create` row controls both operation eligibility and, through `fieldAccess`, the ordinary create field set. An allowed operation does not bypass its field restrictions.
 - Ordinary create fields need not be readable or already present in `fields`; a create-only invisible field appears in create mode only.
 - `meta.field.read` authorizes field definitions and table headers, never business values or submitted create/update fields.
-- `data.record.read.fieldAccess` limits business values inside the metadata-visible Schema field set. Update or batch-update field access cannot synthesize read visibility.
+- The `fieldAccess` property of the matched `data.record.read` permission result limits business values inside the metadata-visible Schema field set. Update or batch-update field access cannot synthesize read visibility.
 - The single-update and bulk-update field dimensions are independent. Do not use one to grant or deny the other.
 - `partialMask` and `fullMask` on the record-read decision preserve masked value display; masks and `readonly` alone do not grant create or update. `hidden` grants no access in its matched dimension.
 
@@ -114,15 +114,15 @@ Treat the permission-trimmed Schema collections as separate contracts:
 - `createFields`: create structural upper bound; missing or invalid means empty, with no fallback to `fields`.
 - `editableFields`: currently ignored. Preserve unknown response fields when appropriate, but do not consume this collection for edit behavior.
 
-Compute:
+Compute the field-set intersections below using the permission keys and allowed `fieldAccess` states in the table above. A permission key is an identifier; the matched result's `fieldAccess` property describes field access and is not part of that identifier.
 
 ```text
 entity = permission-aware Schema entity ∩ meta.entity.read
-headers = fields ∩ meta.field.read(readable states)
-create = createFields ∩ data.record.create(creatable|*) ∩ create-capable UI fields
-display = headers ∩ data.record.read(readable states)
-edit = display ∩ data.record.update(editable|*) ∩ edit-capable UI fields
-batchEdit = display ∩ data.record.bulkUpdate(editable|*) ∩ batch-capable UI fields
+headers = fields ∩ metadata-visible fields
+create = createFields ∩ fields allowed for creation ∩ create-capable UI fields
+display = headers ∩ fields allowed for reading business values
+edit = display ∩ fields allowed for single-record editing ∩ edit-capable UI fields
+batchEdit = display ∩ fields allowed for batch editing ∩ batch-capable UI fields
 records = data.record.read ? field-authorized/masked rows : []
 ```
 

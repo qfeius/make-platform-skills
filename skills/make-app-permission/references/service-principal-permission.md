@@ -109,15 +109,20 @@ Preserve the stable IAM response envelope and select/normalize App permission ro
 }
 ```
 
-Consume `fieldAccess` by permission dimension:
+`permissionKey` holds a permission-point identifier such as `data.record.read`.
+`fieldAccess` is a sibling property on that permission result, mapping field keys
+to access-state strings or arrays. States such as `readonly` and `editable` are
+property values; neither `fieldAccess` nor these states extend the permission key.
+
+Consume each matched permission result's `fieldAccess` property by permission dimension:
 
 - `meta.entity.read`: entity metadata permission only; use it to include a Schema-present entity in navigation and allow its object route. It does not grant field visibility or record values.
 - `meta.field.read`: field-definition/Schema/table-header visibility only. It never grants record values or business writes.
-- `meta.field.create/update/delete`: existing field-metadata permissions for creating/updating/deleting field definitions. They do not authorize new records or record-field value changes; ordinary App data helpers need not consume them.
+- `meta.field.create`, `meta.field.update`, and `meta.field.delete`: existing field-metadata permissions for creating/updating/deleting field definitions. They do not authorize new records or record-field value changes; ordinary App data helpers need not consume them.
 - `data.record.read`: authorize list/detail/pagination operations and apply its `fieldAccess` readable states to business values inside the metadata-visible Schema field set. Preserve masked states. It must not remove metadata-authorized headers when record access is denied.
-- `data.record.create`: authorize create route/entry/handler/submit and intersect its `fieldAccess(creatable|*)` with `createFields` for ordinary create. Approval create uses Workflow start-config field authorization instead, retaining its operation gate.
-- `data.record.update`: single-edit operation and `fieldAccess(editable|*)` for already-readable business-value fields.
-- `data.record.bulkUpdate`: independent batch-edit operation and its own `fieldAccess(editable|*)`; never borrow `data.record.update` field authorization.
+- `data.record.create`: authorize create route/entry/handler/submit and intersect `createFields` with fields whose states in the matched result's `fieldAccess` property include `creatable` or `*` for ordinary create. Approval create uses Workflow start-config field authorization instead, retaining its operation gate.
+- `data.record.update`: single-edit operation and `fieldAccess` property (allowed states: `editable` or `*`) for already-readable business-value fields.
+- `data.record.bulkUpdate`: independent batch-edit operation and its own `fieldAccess` property (allowed states: `editable` or `*`); never borrow `data.record.update` field authorization.
 - Operation and field evaluation share the matching record permission decision, but remain separate checks: an operation allow cannot bypass a named field restriction or the relevant Schema upper bound.
 
 In this App-scoped principal snapshot, an allow row with empty `fieldAccess` is unrestricted for that permissionKey at its resolved resource specificity. A matching deny wins. Named field entries override a wildcard field baseline. This principal-snapshot convention does not imply that an empty final Data API write decision allows submitted fields; the backend remains the final authority.

@@ -90,6 +90,29 @@ const makeuiBundle = [makeuiSkill, componentUsage, drawerLayout, routeLayout].jo
   '\n',
 );
 
+const permissionGuidance = [
+  ['README.md', readme],
+  ['skills/make-app-permission/SKILL.md', permissionSkill],
+  ['skills/make-app-permission/references/permission-boundaries.md', boundaries],
+  ['skills/make-app-permission/references/service-principal-permission.md', principalPermission],
+  ['skills/make-app-permission/references/ui-permission-runtime.md', runtime],
+  ['skills/make-app-permission/references/testing-and-audit.md', permissionTesting],
+  ['skills/make-app-permission/references/system-field-contract.md', systemFieldContract],
+  ...[
+    'skills/make-app-actions/SKILL.md',
+    'skills/make-app-actions/references/action-permission-model.md',
+    'skills/make-app-actions/references/batch-edit-flow.md',
+    'skills/make-app-actions/references/testing-and-pitfalls.md',
+  ].map((file) => [file, read(file)]),
+];
+for (const [file, guidance] of permissionGuidance) {
+  assert.doesNotMatch(
+    guidance,
+    /\b(?:data\.record|meta\.field)\.[A-Za-z*]+(?:\/[A-Za-z*]+)*\.fieldAccess\b/,
+    `${file}: fieldAccess is a permission-result property, never part of a permission key`,
+  );
+}
+
 assert.match(
   permissionSkill.split('---')[1] ?? '',
   /(字段可新建|可新建)[^"\n]*(creatable|createFields)|(creatable|createFields)[^"\n]*(字段可新建|可新建)/i,
