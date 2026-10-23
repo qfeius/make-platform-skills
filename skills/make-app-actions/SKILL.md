@@ -72,10 +72,7 @@ requests, query context, field controls, business feedback, and list refresh.
    map authoritative `noPermissionRecordIds` from the documented HTTP 200 business
    denial to exact whole-row error-red feedback. Select-all denial has no row IDs
    and remains toast-only.
-8. For batch edit, require metadata visibility, business-value read access,
-   and target-field access from the `fieldAccess` property of the independently
-   matched `data.record.bulkUpdate` permission result (`editable` or `*`).
-   Then apply package capability filtering. New Make App hosts use the package's public generic
+8. For batch edit, require the independent bulkUpdate gate and metadata-visible/readable fields with effective writable state. Preserve applicable metadata-read and record read/write restrictions, restrictive arrays and baselines; follow the permission Skill's versioned raw-principal profile. Do not require meta.field.update/data.field.update or select just one permissive operation row. Then apply package capability filtering. New Make App hosts use the package's public generic
    `RecordBatchEditModal` with the selected design system's injected `Modal`,
    `FieldSelect`, and `ModeControl` to meet the default field-icon contract.
    This includes Ant Design hosts: `AntdRecordBatchEditModal` in `0.3.1` does

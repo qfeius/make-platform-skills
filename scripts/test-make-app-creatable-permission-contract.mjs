@@ -14,6 +14,7 @@ const read = (relativePath) => {
 };
 
 const permissionSkill = read('skills/make-app-permission/SKILL.md');
+const profiles = read('skills/make-app-permission/references/design-and-protocol-profiles.md');
 const boundaries = read(
   'skills/make-app-permission/references/permission-boundaries.md',
 );
@@ -92,6 +93,7 @@ const makeuiBundle = [makeuiSkill, componentUsage, drawerLayout, routeLayout].jo
 
 const permissionGuidance = [
   ['README.md', readme],
+  ['skills/make-app-permission/references/design-and-protocol-profiles.md', profiles],
   ['skills/make-app-permission/SKILL.md', permissionSkill],
   ['skills/make-app-permission/references/permission-boundaries.md', boundaries],
   ['skills/make-app-permission/references/service-principal-permission.md', principalPermission],
@@ -232,8 +234,8 @@ assert.match(
 );
 assert.match(
   permissionBundle,
-  /createFields[\s\S]{0,1200}data\.record\.create[\s\S]{0,1200}creatable/i,
-  'create fields must intersect createFields with data.record.create field access',
+  /legacy[\s\S]*data\.record\.create[\s\S]*createFields[\s\S]*meta\.field\.read[\s\S]*creatable/i,
+  'legacy create must retain its operation gate and existing metadata-derived field contract',
 );
 assert.match(
   permissionBundle,
@@ -242,14 +244,24 @@ assert.match(
 );
 assert.match(
   boundaries,
-  /Apply a matching `effect: deny` before allows; it denies the matching permission dimension\./,
+  /Operation gates[\s\S]{0,160}effect: deny[\s\S]{0,100}wins over allow/,
   'deny semantics must be described per permission dimension, not as a record operation denial',
 );
 assert.doesNotMatch(
   permissionBundle,
-  /fieldCondition|policy editing|permission groups/i,
-  'the front-end App permission skill must not own back-office policy configuration',
+  /(?:create|edit|manage) (?:back-office )?(?:policies|permission groups) (?:in|from) the (?:UI|browser)/i,
+  'the front-end skill may explain policy provenance but must not manage back-office configuration',
 );
+for (const [pattern, reason] of [
+  [/v3\.0\.0[\s\S]*2026-08-04/, 'pin the design version'],
+  [/Within one Statement[\s\S]*Across Statements[\s\S]*hidden > fullMask > partialMask > readonly > editable/, 'separate specificity from cross-statement strictness'],
+  [/raw row[\s\S]*provenance[\s\S]*baseline[\s\S]*named/, 'raw merged rows cannot imply Statement grouping'],
+  [/readonly[\s\S]*partialMask[\s\S]*alongside[\s\S]*editable/, 'conflicting raw arrays must preserve restrictions'],
+  [/rejected as a whole[\s\S]*422/, 'reject the whole restricted write'],
+  [/not validation of this Skill PR/, 'do not reuse the incident as this PR validation'],
+]) {
+  assert.match(profiles, pattern, reason);
+}
 for (const expectedValue of [
   'Make.Field.ID',
   'IDField',
@@ -323,15 +335,20 @@ for (const conformanceCase of [
   'invalid_requested_identifiers_fail_closed',
   'operation_global_permission_wildcard_allows',
   'operation_segment_permission_wildcard_allows',
-  'record_create_deny_also_denies_create_field',
+  'operation_deny_does_not_deny_read_derived_create_field',
   'read_field_deny_does_not_deny_record_create_operation',
   'entity_resource_wildcard_matches',
   'parent_and_global_resources_match',
-  'record_field_dimensions_are_independent',
+  'console_style_record_gate_allows_business_edits_without_field_update_keys',
   'bulk_update_field_access_is_independent_from_single_update',
   'read_dimension_access_states',
-  'metadata_permissions_do_not_grant_business_field_access',
-  'non_creatable_states_do_not_grant_create_field',
+  'record_update_does_not_require_meta_update',
+  'raw_effective_restrictions_survive_record_write_allow',
+  'raw_missing_field_restriction_defaults_editable_inside_gate',
+  'raw_merged_wildcard_restrictions_cannot_be_overridden_by_named_editable',
+  'raw_state_arrays_preserve_any_restriction',
+  'decision_envelopes_are_not_raw_principal_rows',
+  'legacy_create_states_remain_supported',
   'explicit_null_field_access_fails_closed',
   'invalid_field_access_state_fails_closed',
   'valid_field_access_state_lists_are_preserved',
@@ -433,15 +450,15 @@ assert.match(
 
 const principalExample = JSON.parse([...principalPermission.matchAll(/```json\n([\s\S]*?)\n```/g)].find((match) => match[1].includes('"permissions"'))[1]);
 const principalRow = (key) => principalExample.permissions.find((row) => row.permissionKey === key);
-assert.equal(principalRow('data.record.create').fieldAccess.create_only_field, 'creatable');
+assert.deepEqual(principalRow('data.record.create').fieldAccess, {});
 assert.equal(principalRow('data.record.update').fieldAccess.editable_field, 'editable');
-assert.equal(principalRow('data.record.read').fieldAccess.editable_field, 'readonly');
-assert.equal(principalRow('meta.field.read').fieldAccess.editable_field, 'readonly');
-assert.equal(principalRow('meta.field.read').fieldAccess.create_only_field, undefined);
+assert.equal(principalRow('data.record.read').fieldAccess.editable_field, 'editable');
+assert.equal(principalRow('meta.field.read').fieldAccess.editable_field, 'editable');
+assert.equal(principalRow('meta.field.read').fieldAccess.create_only_field, 'creatable');
 
-const fieldDimensionRows = boundaries.split('\n').filter((line) => /^\| (Create form|Table headers|List\/detail|Edit\/cell|Batch edit)/.test(line));
+const fieldDimensionRows = boundaries.split('\n').filter((line) => /^\| (Ordinary create|Table headers|List\/detail|Edit\/cell|Batch edit)/.test(line));
 for (const [surface, key] of [
-  ['Create form', 'data.record.create'],
+  ['Ordinary create', 'data.record.create'],
   ['Table headers', 'meta.field.read'],
   ['List/detail', 'data.record.read'],
   ['Edit/cell', 'data.record.update'],
@@ -452,8 +469,8 @@ for (const [surface, key] of [
 }
 assert.match(
   permissionTesting,
-  /data\.record\.create[^\n]*deny[^\n]*metadata allow[^\n]*creation and create fields denied/i,
-  'a record-create deny must also deny its create-field dimension despite metadata allow',
+  /(?:legacy|create)[^\n]*(?:gate|operation)[^\n]*(?:independent|separate)|data\.record\.create[^\n]*deny[^\n]*(?:field|metadata)/i,
+  'legacy create-field selection cannot bypass the independent record-create gate',
 );
 assert.doesNotMatch(
   permissionBundle,

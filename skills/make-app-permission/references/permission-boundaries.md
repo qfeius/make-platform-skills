@@ -12,6 +12,8 @@ Use this reference before choosing scope, resource, permissionKey, Schema collec
 - Route and backend boundaries
 - Common mistakes
 
+Read [design and protocol profiles](design-and-protocol-profiles.md) before applying these rules: v3 final Decision semantics, raw principal compatibility, and legacy create are different contracts.
+
 ## Front-end App scope
 
 This skill only consumes the front-end App permission response. Request the exact App scope `make://<tenantId>/meta/app/<appKey>` and use only the rows needed for this App's `data.record.*`, `meta.entity.*`, `meta.field.*`, and supported wildcard decisions. Do not use tenant-root or unrelated permission results to authorize App routes, fields, buttons, or records.
@@ -89,22 +91,17 @@ For an entity that has `meta.entity.read` and readable fields but lacks `data.re
 
 Metadata access and business-value access are separate decisions. `meta.field.read`, `meta.field.create`, `meta.field.update`, and `meta.field.delete` read/create/update/delete field definitions; `meta.field.update` does not edit a record's field value. `meta.field.create` exists, but does not authorize new business records.
 
-| Surface | Schema upper bound | permissionKey | Allowed `fieldAccess` states |
-| --- | --- | --- | --- |
-| Create form | `createFields` | `data.record.create` | `creatable`, `*` |
-| Table headers / field definitions | `fields` | `meta.field.read` | `readonly`, `editable`, `partialMask`, `fullMask`, `*` |
-| List/detail/filter values | metadata-visible `fields` | `data.record.read` | `readonly`, `editable`, `partialMask`, `fullMask`, `*` |
-| Edit/cell edit | readable business-value fields | `data.record.update` | `editable`, `*` |
-| Batch edit | readable business-value fields | `data.record.bulkUpdate` | `editable`, `*` |
+| Surface | Schema upper bound | Operation / field evaluation |
+| --- | --- | --- |
+| Ordinary create (legacy only) | `createFields` | `data.record.create` gate; historical create states from matched `meta.field.read`: `creatable`, `readonly`, `editable`, `partialMask`, `fullMask`, `*` |
+| Table headers / definitions | `fields` | `meta.field.read` metadata visibility |
+| List/detail/filter values | metadata-visible `fields` | `data.record.read` gate plus effective readable/masked field states |
+| Edit/cell edit | readable fields | `data.record.update` gate plus effective writable state and editor capability |
+| Batch edit | readable fields | independent `data.record.bulkUpdate` gate plus the same conservative field-state checks and batch capability |
 
-Therefore:
+Existing-record effective write restrictions include applicable `meta.field.read` and record read/write allow rows; do not pick only the current operation's permissive `fieldAccess` property. Metadata update is not a business-write gate. No independent `data.field.update` prerequisite is defined in the cited design. Record operations remain independent; an allow for update cannot grant bulkUpdate or delete.
 
-- A matched `data.record.create` row controls both operation eligibility and, through `fieldAccess`, the ordinary create field set. An allowed operation does not bypass its field restrictions.
-- Ordinary create fields need not be readable or already present in `fields`; a create-only invisible field appears in create mode only.
-- `meta.field.read` authorizes field definitions and table headers, never business values or submitted create/update fields.
-- The `fieldAccess` property of the matched `data.record.read` permission result limits business values inside the metadata-visible Schema field set. Update or batch-update field access cannot synthesize read visibility.
-- The single-update and bulk-update field dimensions are independent. Do not use one to grant or deny the other.
-- `partialMask` and `fullMask` on the record-read decision preserve masked value display; masks and `readonly` alone do not grant create or update. `hidden` grants no access in its matched dimension.
+`readonly`, `hidden`, `partialMask`, and `fullMask` all deny existing-record writes; any such applicable array state wins over `editable` or compatibility `*`. Only the legacy create profile retains its historical create-state evaluation. It does not redefine v3, whose five field states exclude `creatable`.
 
 ## Schema and permission intersection
 
@@ -119,10 +116,10 @@ Compute the field-set intersections below using the permission keys and allowed 
 ```text
 entity = permission-aware Schema entity ∩ meta.entity.read
 headers = fields ∩ metadata-visible fields
-create = createFields ∩ fields allowed for creation ∩ create-capable UI fields
+create = createFields ∩ fields allowed by the legacy meta.field.read create-state profile ∩ create-capable UI fields
 display = headers ∩ fields allowed for reading business values
-edit = display ∩ fields allowed for single-record editing ∩ edit-capable UI fields
-batchEdit = display ∩ fields allowed for batch editing ∩ batch-capable UI fields
+edit = display ∩ effectively writable fields under the single-update gate ∩ edit-capable UI fields
+batchEdit = display ∩ effectively writable fields under the independent bulk-update gate ∩ batch-capable UI fields
 records = data.record.read ? field-authorized/masked rows : []
 ```
 
@@ -136,25 +133,20 @@ Schema membership never replaces principal permission checks, and principal perm
 - Validate the envelope before selecting rows: the current scope must be an exact `make://<tenantId>/meta/app/<appKey>` App scope, and an extra `appResource` value must exactly equal that scope; explicit `null`, blank, non-string-equivalent, or conflicting values fail closed. Apply the permission-row selection table before strict row validation. Every selected or unclassifiable row must have exactly three non-empty `permissionKey` segments and an `allow` or `deny` effect; one malformed row poisons the whole access snapshot. Never drop a malformed selected row while retaining sibling allows.
 - Treat requested entity and field keys as concrete string identifiers, not policy patterns. Non-strings (including `null`, numbers, arrays, and objects), blank/whitespace strings, and the literal `*` must fail closed before resource or field wildcard matching; `*` is valid only inside permission statements.
 - A selected row may use only the documented permission resource families: global `*`, or the current tenant/App with namespace `meta` or IAM alias `*`, optionally followed by an exact or wildcard entity. Do not treat arbitrary namespaces or wildcard tenant/App segments as App permission. A resource that cannot be classified as clearly unrelated must remain selected and fail closed rather than being guessed away.
-- Resource specificity is a fixed semantic order: global `*` < current App (canonical or namespace alias) < current App `entity/*` < current App `entity/<exactEntityKey>`. Prefer the highest matching level for allow field ranges and merge allows only at that same level. Canonical `.../meta/app/<appKey>` and IAM namespace-alias `.../*/app/<appKey>` resources at the same App/entity level have equal semantic specificity; string length or wildcard character counts must not change this order.
-- Apply a matching `effect: deny` before allows; it denies the matching permission dimension. A `data.record.*` deny therefore denies its operation and the associated business-field dimension; a `meta.field.read` deny denies metadata visibility only. Do not encode a field-only hidden exception as a deny statement.
-- Let a named field entry override both `*` and empty/unrestricted baselines across all same-specificity allow ranges so broad policies can retain named exceptions. If any same-specificity allow names the field, evaluate only the named values and do not fall back to another row's `*` or empty `fieldAccess`. Within that named set, `hidden` is deny-like and wins over `creatable`, `readonly`, `editable`, masks, or `*`; conflicting same-level named allows must never widen a hidden field. This field decision does not convert the allow statement into an operation-level deny.
-- In the App-scoped principal snapshot, treat empty `fieldAccess` on the most-specific allow as unrestricted for that permissionKey (do not infer the final backend write-decision contract from this):
-  - all `createFields` while evaluating `data.record.create` for creation;
-  - all `fields` while evaluating `meta.field.read` for headers, and metadata-visible fields for `data.record.read` values;
-  - all already-readable value fields for `data.record.update` or independently `data.record.bulkUpdate`.
+- Keep the fixed resource order `global * < current App < entity/* < exact entity` for legacy create range selection; canonical and namespace-alias resources at the same level have equal specificity. Legacy create retains most-specific allows, same-level unions and its existing named-over-baseline behavior. Do not apply that widening algorithm to existing-record field restrictions.
+- Operation gates match the requested permission only; explicit matching `effect: deny` wins over allow. Missing operation grants remain denied. A deny for single update does not itself deny an independently allowed bulkUpdate; field-only restrictions use access states rather than an operation deny statement.
+- Under v3, named fields override the baseline inside one Statement, then different Statements merge by strictness: `hidden > fullMask > partialMask > readonly > editable`. Raw principal rows do not reliably retain Statement grouping. A single raw row may aggregate several Statements. Without confirmed grouping or authoritative pre-expanded field states, existing-record checks conservatively retain restrictions from both the baseline and named entries, then keep all applicable metadata-read and record read/write restrictions across rows and resource levels. Named-over-baseline applies only to confirmed Statement groups; a final Decision map is already resolved. Never use a named editable row to erase another row's baseline restriction or claim to have reconstructed final v3 evaluation.
+- An empty/omitted raw `fieldAccess` contributes no field restriction. For existing records, this default is usable only under the requested allowed operation, visible/readable Schema bounds and host capability. It never overrides a restrictive sibling row or grants a missing operation. The legacy create profile retains its existing unrestricted representation. Neither rule defines a final Data API write decision's empty-container semantics.
 - Distinguish an omitted or empty `fieldAccess` from a malformed value. An omitted property or empty object is the intentional unrestricted form; explicit `null`, a non-object, an array, a blank field key, an empty state list, an unknown state, or a state list containing non-strings is invalid IAM data and the access snapshot must fail closed instead of being normalized to `{}`. Null/primitive envelopes or rows and non-array `permissions` must return denied access without throwing.
 
-Interpret access states inside the matched permissionKey. Do not treat a value such as `*` as a global field grant detached from its create/read/update dimension.
-
-In an expanded IAM runtime response, a wildcard field baseline may coexist with a named exception, for example `{ "*": "readonly", "secret": "hidden" }`; evaluate that shape defensively as runtime `fieldAccess`. A `creatable` state grants ordinary creation only when returned for `data.record.create`; it is not readable and never transfers between permission keys. Reserve `effect: deny` for denying the whole matched permission dimension; a matching `data.record.*` deny correctly fails closed for that operation.
+`fieldAccess` is a result property; its values are states, not permission keys. The current raw profile accepts scalar strings and state arrays, with `*` as compatibility unrestricted. For existing-record writes, combine restrictions rather than allowing any editable state. `creatable` is accepted only for legacy compatibility and never itself grants existing-record writing.
 
 ## Route and backend boundaries
 
 - Protect App, object, create, and fixed routes; require `meta.entity.read` inside the dynamic object route as well as navigation, because menu hiding is insufficient and direct URLs bypass the sidebar.
 - Do not load list/detail without `data.record.read`; this must stop record requests and rows without hiding an entity-authorized table shell or its `meta.field.read` headers.
 - Recheck create/update/delete/cell/batch handlers immediately before mutation.
-- Let backend record APIs enforce row-level `dataCondition` and final write authorization.
+- Let backend record APIs enforce row-level `dataCondition` and final write authorization. Reject an entire existing-record mutation when any submitted field is restricted; retain the draft/selection, report failure and never silently trim forbidden changes into a success.
 - Do not cache permission-trimmed Schema across principals. Refresh permission and Schema together when access is refreshed.
 
 ## Common mistakes
@@ -166,7 +158,8 @@ In an expanded IAM runtime response, a wildcard field baseline may coexist with 
 - Falling back from missing `createFields` to visible `fields`.
 - Treating `creatable` as readable or transferring a state between permission dimensions.
 - Using or requiring `meta.field.create` for a create form.
-- Using metadata permissions as business-value authorization, or checking a record operation without its fieldAccess.
+- Requiring a metadata-write or invented data-field-update gate for business values, ignoring metadata-read/record-field restrictions, or choosing one editable row to bypass a restrictive sibling.
+- Migrating legacy create fields or tightening create states as a side effect of the edit correction.
 - Hiding create/edit because no writable field exists.
 - Filtering visible controls but submitting the complete form store.
 - Refreshing permissions without invalidating permission-trimmed Schema.

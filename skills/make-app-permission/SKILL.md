@@ -14,7 +14,7 @@ This skill owns permission semantics. Use `make-app-auth` for login/session, `ma
 ## Quick start
 
 1. Inspect `apps/docs/api.md`, Service/UI schema adapters and types, principal-permission code, providers, router, object pages, create/edit forms, submit builders, refresh flow, and tests.
-2. Read `references/permission-boundaries.md` before selecting scope, permissionKey, schema collection, or field access state.
+2. Read `references/design-and-protocol-profiles.md` for v3.0.0 sources, raw-principal compatibility, and the retained legacy create profile; read `references/permission-boundaries.md` before selecting scope, permissionKey, schema collection, or field access state.
 3. Read `references/service-principal-permission.md` before changing `/principal/permission` or interpreting IAM `fieldAccess`.
 4. Read `references/ui-permission-runtime.md` before changing route/action gates, create/read/update field sets, payload filtering, or refresh.
 5. Read `references/system-field-contract.md` before implementing ID/audit create or edit capability.
@@ -25,21 +25,23 @@ This skill owns permission semantics. Use `make-app-auth` for login/session, `ma
 
 ## Required contract
 
-普通新建取 `createFields` 与 `data.record.create` 匹配权限结果中 `fieldAccess` 属性所允许字段的交集。对象有有效 `bpmDefinitionKey` 时，先按 [make-app-approval](../make-app-approval/SKILL.md) 选择审批新建分支：UI 和 Service 均以启动配置授权字段为准，不再与普通 IAM 字段集合求交；应用、对象及新建操作权限仍保留。此例外不扩展到普通已有记录编辑，也不把“我的审批”固定导航作为业务对象菜单权限项。详细合同见 [审批新建字段](../make-app-approval/references/initiation-contract.md)。
+Existing-record editing uses the requested record operation gate plus effective field state, following PermissionDesign v3.0.0 (2026-08-04) within the current raw-principal compatibility profile. Read [design and protocol profiles](references/design-and-protocol-profiles.md) first. Do not require `meta.field.update` or `data.field.update` for business values, and do not mistake raw principal rows for final Decision output.
+
+普通新建保留 legacy profile：`data.record.create` 控制操作，字段由 `createFields` 与 `meta.field.read` 匹配结果中历史 create-state 集合所允许字段取交集；本轮不迁移新建字段维度或收紧状态。v3 不定义 `creatable`。有效审批新建按 [make-app-approval](../make-app-approval/SKILL.md) 使用启动配置授权字段，保留应用、对象和新建操作资格，配置失败不回退普通字段。
 
 - Expose `/api/make/app/principal/permission`; have Service call `/api/make/iam/v1/principal/permission` with App scope, `MakeService.GetResource`, and the established login context. This is a direct Make proxy: return every completed IAM response unchanged, including 2xx/4xx/5xx status, Content-Type, and body. Do not request tenant-root scope or upstream platform permission filters. Before strict normalization, classify rows with `references/permission-boundaries.md`: ignore only clearly unrelated rows, and fail closed for every selected or unclassifiable row.
-- Match exact, wildcard, parent, App, entity, IAM namespace-wildcard App resources, and deny correctly. Use the most-specific allow field range; deny wins.
+- Match exact, wildcard, parent, App, entity, IAM namespace-wildcard App resources, and deny correctly. Use most-specific allow field ranges and same-level unions only for the retained legacy-create profile; existing-record field checks preserve all applicable restrictions across rows and resource levels. Matching operation deny wins.
 - Permission keys identify operations; `fieldAccess` is a separate property on a matched IAM permission result, and values such as `creatable`, `editable`, and `readonly` are access states. Never append `fieldAccess` to a permission key.
-- Keep create, visibility, and editability as separate field-set decisions:
-  - create form: intersect `createFields` with fields allowed by the matched `data.record.create` permission result's `fieldAccess`; allowed states are `creatable` or `*`;
-  - table headers: intersect `fields` with fields allowed by the matched `meta.field.read` permission result's `fieldAccess` readable states;
-  - list/detail/filter values: intersect authorized metadata fields with fields allowed by the matched `data.record.read` permission result's `fieldAccess` readable states;
-  - edit/cell edit: intersect readable fields with fields allowed by the matched `data.record.update` permission result's `fieldAccess` (`editable` or `*`); batch edit uses the separate `data.record.bulkUpdate` permission result's `fieldAccess` with those same allowed states.
+- Keep create, visibility, and editability separate:
+  - ordinary create: the legacy `createFields` intersection and historical create-state set described in the profile reference;
+  - table headers: Schema `fields` filtered by metadata visibility (`meta.field.read`);
+  - business values: metadata-visible fields under the record-read gate and effective field restrictions, preserving masks;
+  - single/bulk editing: the independently requested update/bulkUpdate gate plus metadata-visible, readable fields whose effective state permits writing, and host capability. Merge applicable metadata-read and record read/write restrictions conservatively; never authorize from just one permissive operation row.
 - Keep entity navigation, table headers, and record data independent: `meta.entity.read` controls whether a Schema-present entity appears in navigation and can enter its object route; both the navigation and the dynamic route must reject the entity when this permission is absent. `meta.field.read` controls the authorized columns/table headers; `data.record.read` controls record/detail requests, rows, and business-value field access. Metadata authorization never grants record values. When record read is denied or revoked but entity and fields are authorized, keep the navigation item and table shell with authorized headers, skip every record request, and render an explicit empty row set so cached values cannot remain visible.
-- Preserve every access state returned for a field. Current IAM responses may use arrays such as `["creatable", "readonly"]` or scalar strings; normalize a supported scalar string to a one-element array and authorize a permission dimension when any state is allowed for that dimension. Never coerce an array with `String(value)` or template interpolation.
+- Preserve every access state returned for a field. Current IAM responses may use arrays such as `["creatable", "readonly"]` or scalar strings; normalize a supported scalar string to a one-element array. Existing-record writes reject every applicable readonly/hidden/mask state even when another state is editable or compatibility `*`; the retained legacy create profile keeps its historical evaluator and hidden-exception handling. Never coerce an array with `String(value)` or template interpolation.
 - Treat missing `createFields` as empty. Never fall back to `fields`, and do not consume `editableFields` for current edit behavior.
-- Gate the create entry and submit operation with `data.record.create`; 普通新建 derives fields from the `fieldAccess` property of the matched `data.record.create` permission result and `createFields`, while 审批新建 uses the authorized 启动配置 fields from `make-app-approval`. `meta.field.create`, `meta.field.update`, and `meta.field.delete` are field-metadata permissions; they never grant business-value creation or editing. The operation gate alone never bypasses its fieldAccess; ordinary create retains its field intersection, and approval create retains the separate Workflow field authorization. Gate update/delete/bulk-update independently with their own operation keys.
-- Recompute the latest create/edit allowlist before submit and build payloads from it. Never spread the complete form store into a protected mutation.
+- Gate the create entry and submit operation with `data.record.create`; 普通新建 retains legacy fields from `meta.field.read` and `createFields`, while 审批新建 uses authorized 启动配置 fields. `meta.field.create`, `meta.field.update`, and `meta.field.delete` concern field definitions. `data.field.update` is not a prerequisite in the cited design/profile. Keep update/delete/bulkUpdate operation gates independent while merging applicable field restrictions across their raw allow rows.
+- Recompute current field authorization before submit. Build payloads from rendered fields, and reject the entire existing-record write if any attempted field is now restricted, stale or unauthorized; preserve the draft and never silently trim a forbidden update then report success.
 - Exclude ID and system audit fields from create capability. Keep existing audit-field edit capability when the field is visible, update-authorized, and supported by the host editor.
 - Keep create-only invisible fields available only in create mode. A `creatable` access state is not readable or editable.
 - Add App/object/fixed-route guards; hiding menus or buttons is not authorization. Recheck handlers before reads and mutations.
@@ -52,6 +54,7 @@ This skill owns permission semantics. Use `make-app-auth` for login/session, `ma
 
 | Task | Read |
 | --- | --- |
+| Versioned design, raw principal vs Decision, legacy create and conservative write restrictions | `references/design-and-protocol-profiles.md` |
 | Platform vs App scope, create/read/update field surfaces, Schema collections, matching | `references/permission-boundaries.md` |
 | Service endpoint, IAM request/response, metadata vs record `fieldAccess` | `references/service-principal-permission.md` |
 | Providers, helpers, routes, create/edit flow, payload, refresh, Lookup | `references/ui-permission-runtime.md` |

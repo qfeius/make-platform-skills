@@ -61,7 +61,7 @@ Apply this order:
 
 Build batch candidates from runtime normalized schema:
 
-1. Keep fields visible under `meta.field.read` and readable under the matched `data.record.read` permission result's `fieldAccess` property. Then require `editable` or `*` in the `fieldAccess` property of the independently matched `data.record.bulkUpdate` permission result. Do not borrow single-update field grants.
+1. Require the independent `data.record.bulkUpdate` gate, then keep metadata-visible/readable fields whose effective state permits writing. Conservatively merge applicable `meta.field.read` and record read/write restrictions; do not pick one editable bulk row or borrow single-update operation permission. Any readonly/hidden/mask array state or baseline restriction denies writing, even beside editable/compatibility `*`. Follow the permission Skill's versioned raw-principal profile.
 2. Pass those fields to `resolveBatchEditableFields`.
 3. Exclude readonly/derived Lookup fields or any field the installed package
    reports unsupported.
@@ -148,9 +148,7 @@ into the host.
 ## Submit lifecycle
 
 1. Acquire a single-submit lock; duplicate confirm clicks do nothing.
-2. Recheck the current cached `data.record.bulkUpdate` permission. Confirm that
-   the target field has `editable` or `*` in the matched result's `fieldAccess`
-   property and retains metadata/value visibility, without refetching principal.
+2. Recheck the current cached `data.record.bulkUpdate` gate and target field's effective state across applicable metadata/read/write restrictions without refetching principal. Do not require metadata update or data-field-update permission.
 3. Re-resolve current field capability and validate the normalized value.
 4. Build `data`/`relations` using the host's existing field mutation builders.
 5. Reuse the frozen prechecked target exactly and call one Service bulk route.
@@ -159,7 +157,7 @@ into the host.
 7. If the user changed selection during the request, preserve the newer
    selection and only refresh data.
 8. On mutation failure, keep the modal/selection available where recovery is
-   possible and show the Service error. Release the submit lock in `finally`.
+   possible and show the Service error. A restricted or unauthorized attempted field rejects the entire mutation; preserve the draft, never silently drop the change into a success, and never auto-replay after permission restoration. Release the submit lock in `finally`.
 
 The precheck is not repeated on submit; the final bulk endpoint is the authority.
 Never reconstruct the target from current list state after the modal opens.

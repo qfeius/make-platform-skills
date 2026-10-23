@@ -507,8 +507,13 @@ assert.match(
 
 assert.match(
   batchEdit,
-  /(?:fieldAccess[\s\S]{0,200}data\.record\.bulkUpdate|data\.record\.bulkUpdate[\s\S]{0,200}fieldAccess)[\s\S]*resolveBatchEditableFields[\s\S]*(AntdRecordBatchEditModal)[\s\S]*(RecordBatchEditModal)/i,
-  'batch modal fields must pass bulkUpdate field authorization and package capability filtering',
+  /data\.record\.bulkUpdate[\s\S]{0,200}effective state[\s\S]{0,300}restrictions[\s\S]{0,300}readonly[\s\S]*resolveBatchEditableFields[\s\S]*(AntdRecordBatchEditModal)[\s\S]*(RecordBatchEditModal)/i,
+  'batch fields require an independent bulk gate, effective restrictions, and package capability',
+);
+assert.match(
+  batchEdit,
+  /rejects the entire mutation[\s\S]{0,200}preserve the draft[\s\S]{0,200}never silently drop/,
+  'restricted batch writes must fail as a whole and retain the draft',
 );
 assert.match(
   batchEdit,

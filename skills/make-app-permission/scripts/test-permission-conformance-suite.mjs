@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const suiteScript = path.join(scriptDir, 'permission-conformance-suite.mjs');
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'make-app-permission-conformance-'));
+let suiteRunCount = 0;
 
 try {
   const permissiveAdapter = writeAdapter('permissive.mjs', `
@@ -158,11 +159,26 @@ try {
       const matched = matches(access, entityKey, permissionKey);
       return !matched.some((item) => item.effect === 'deny') && matched.some((item) => item.effect === 'allow');
     };
-    export const canCreateEntityField = (access, entityKey, fieldKey) => fieldAllowed(access, entityKey, fieldKey, 'data.record.create', new Set(['*', 'creatable']));
+    export const canCreateEntityField = (access, entityKey, fieldKey) => fieldAllowed(access, entityKey, fieldKey, 'meta.field.read', new Set(['*', 'creatable', 'editable', 'readonly', 'partialMask', 'fullMask']));
     export const canReadEntityFieldMetadata = (access, entityKey, fieldKey) => fieldAllowed(access, entityKey, fieldKey, 'meta.field.read', new Set(['*', 'editable', 'readonly', 'partialMask', 'fullMask']));
-    export const canReadEntityField = (access, entityKey, fieldKey) => fieldAllowed(access, entityKey, fieldKey, 'data.record.read', new Set(['*', 'editable', 'readonly', 'partialMask', 'fullMask']));
-    export const canUpdateEntityField = (access, entityKey, fieldKey) => fieldAllowed(access, entityKey, fieldKey, 'data.record.update', new Set(['*', 'editable']));
-    export const canBulkUpdateEntityField = (access, entityKey, fieldKey) => fieldAllowed(access, entityKey, fieldKey, 'data.record.bulkUpdate', new Set(['*', 'editable']));
+    const effectiveFieldAllowed = (access, entityKey, fieldKey, operation) => {
+      if (!isValidRequestedIdentifier(fieldKey) || !canUseEntityOperation(access, entityKey, operation)) return false;
+      fieldKey = requestedIdentifier(fieldKey);
+      const restrictionKeys = ['meta.field.read', 'data.record.read', 'data.record.update', 'data.record.bulkUpdate'];
+      const rows = restrictionKeys.flatMap((key) => matches(access, entityKey, key)).filter((row) => row.effect === 'allow');
+      const groups = rows.flatMap((row) => ['*', fieldKey]
+        .filter((key) => Object.hasOwn(row.fieldAccess, key))
+        .map((key) => row.fieldAccess[key]));
+      if (groups.some((states) => states.length > 0 && states.every((state) => state === 'creatable'))) return false;
+      const states = groups.flatMap((group) => group);
+      const restrictions = operation === 'data.record.read'
+        ? new Set(['hidden'])
+        : new Set(['hidden', 'readonly', 'partialMask', 'fullMask']);
+      return !states.some((state) => restrictions.has(state));
+    };
+    export const canReadEntityField = (access, entityKey, fieldKey) => effectiveFieldAllowed(access, entityKey, fieldKey, 'data.record.read');
+    export const canUpdateEntityField = (access, entityKey, fieldKey) => effectiveFieldAllowed(access, entityKey, fieldKey, 'data.record.update');
+    export const canBulkUpdateEntityField = (access, entityKey, fieldKey) => effectiveFieldAllowed(access, entityKey, fieldKey, 'data.record.bulkUpdate');
     export const isCreateCapableField = (field) => !new Set(['Make.Field.ID', 'IDField']).has(field.type) && !new Set([
       'create_user', 'create_time', 'update_user', 'update_time',
       'qfei_create_user', 'qfei_create_time', 'qfei_update_user', 'qfei_update_time',
@@ -180,7 +196,7 @@ try {
   const coreAdapter = writeAdapter('core-only.mjs', coreAdapterSource);
   const coreResult = runSuite(coreAdapter);
   assert.equal(coreResult.status, 0, coreResult.output);
-  assert.match(coreResult.output, /permission conformance: PASS \(47 cases, 2 skipped\)/);
+  assert.match(coreResult.output, /permission conformance: PASS \(\d+ cases, 2 skipped\)/);
   assert.match(coreResult.output, /field_metadata_read_is_independent_from_business_values: SKIP/);
   assert.match(coreResult.output, /bulk_update_field_access_is_independent_from_single_update: SKIP/);
 
@@ -204,14 +220,14 @@ try {
   assert.equal(unknownCapabilityFlag.status, 2);
   assert.match(unknownCapabilityFlag.output, /Usage:/);
 
-  const coreUsesMetadataAdapter = writeAdapter('core-uses-metadata.mjs',
+  const coreUsesRecordCreateAdapter = writeAdapter('core-uses-record-create.mjs',
     coreAdapterSource.replace(
-      "'data.record.create', new Set(['*', 'creatable'])",
-      "'meta.field.read', new Set(['*', 'creatable'])",
+      "'meta.field.read', new Set(['*', 'creatable', 'editable', 'readonly', 'partialMask', 'fullMask'])",
+      "'data.record.create', new Set(['*', 'creatable', 'editable', 'readonly', 'partialMask', 'fullMask'])",
     ));
-  const coreUsesMetadataResult = runSuite(coreUsesMetadataAdapter);
-  assert.notEqual(coreUsesMetadataResult.status, 0);
-  assert.match(coreUsesMetadataResult.output, /record_create_deny_also_denies_create_field/);
+  const coreUsesRecordCreateResult = runSuite(coreUsesRecordCreateAdapter);
+  assert.notEqual(coreUsesRecordCreateResult.status, 0);
+  assert.match(coreUsesRecordCreateResult.output, /operation_deny_does_not_deny_read_derived_create_field/);
 
   const unknownKeySelectedAdapter = writeAdapter(
     'unknown-key-selected.mjs',
@@ -275,46 +291,24 @@ try {
   );
   const noStateListResult = runSuite(noStateListAdapter);
   assert.notEqual(noStateListResult.status, 0);
-  assert.match(noStateListResult.output, /field_metadata_read_is_independent_from_business_values|read_field_deny_does_not_deny_record_create_operation|record_field_dimensions_are_independent|valid_field_access_state_lists_are_preserved/);
+  assert.match(noStateListResult.output, /field_metadata_read_is_independent_from_business_values|operation_deny_does_not_deny_read_derived_create_field|valid_field_access_state_lists_are_preserved/);
 
-  for (const [dimension, permissionKey, states, metadataKey] of [
-    ['Create', 'data.record.create', "['*', 'creatable']", 'meta.field.read'],
-    ['Read', 'data.record.read', "['*', 'editable', 'readonly', 'partialMask', 'fullMask']", 'meta.field.read'],
-    ['Update', 'data.record.update', "['*', 'editable']", 'meta.field.update'],
-  ]) {
-    const metadataAdapter = writeAdapter(
-      `metadata-${dimension.toLowerCase()}.mjs`,
-      correctAdapterSource.replace(
-        `fieldAllowed(access, entityKey, fieldKey, '${permissionKey}', new Set(${states}))`,
-        `fieldAllowed(access, entityKey, fieldKey, '${metadataKey}', new Set(${states}))`,
-      ),
-    );
-    const metadataResult = runSuite(metadataAdapter);
-    assert.notEqual(metadataResult.status, 0, `${dimension} must reject metadata-only authorization`);
-    assert.match(metadataResult.output, /field_metadata_read_is_independent_from_business_values|record_create_deny_also_denies_create_field|read_field_deny_does_not_deny_record_create_operation|record_field_dimensions_are_independent|metadata_permissions_do_not_grant_business_field_access/);
+  for (const extraFieldUpdateKey of ['meta.field.update', 'data.field.update']) {
+    const extraGateAdapter = writeAdapter(`extra-gate-${extraFieldUpdateKey}.mjs`, correctAdapterSource.replace(
+      "return !states.some((state) => restrictions.has(state));",
+      `return canUseEntityOperation(access, entityKey, '${extraFieldUpdateKey}') && !states.some((state) => restrictions.has(state));`,
+    ));
+    const extraGateResult = runSuite(extraGateAdapter);
+    assert.notEqual(extraGateResult.status, 0, extraFieldUpdateKey + ' must not become a required business write gate');
   }
 
-  const permissiveCreateStatesAdapter = writeAdapter(
-    'permissive-create-states.mjs',
-    correctAdapterSource.replace(
-      "'data.record.create', new Set(['*', 'creatable'])",
-      "'data.record.create', new Set(['*', 'creatable', 'editable', 'readonly', 'partialMask', 'fullMask'])",
-    ),
-  );
-  const permissiveCreateStatesResult = runSuite(permissiveCreateStatesAdapter);
-  assert.notEqual(permissiveCreateStatesResult.status, 0);
-  assert.match(permissiveCreateStatesResult.output, /non_creatable_states_do_not_grant_create_field/);
-
-  const operationOnlyCreateAdapter = writeAdapter(
-    'operation-only-create.mjs',
-    correctAdapterSource.replace(
-      "fieldAllowed(access, entityKey, fieldKey, 'data.record.create', new Set(['*', 'creatable']))",
-      "canUseEntityOperation(access, entityKey, 'data.record.create')",
-    ),
-  );
+  const operationOnlyCreateAdapter = writeAdapter('operation-only-create.mjs', correctAdapterSource.replace(
+    "fieldAllowed(access, entityKey, fieldKey, 'meta.field.read', new Set(['*', 'creatable', 'editable', 'readonly', 'partialMask', 'fullMask']))",
+    "canUseEntityOperation(access, entityKey, 'data.record.create')",
+  ));
   const operationOnlyCreateResult = runSuite(operationOnlyCreateAdapter);
   assert.notEqual(operationOnlyCreateResult.status, 0);
-  assert.match(operationOnlyCreateResult.output, /invalid_requested_identifiers_fail_closed|record_field_dimensions_are_independent|non_creatable_states_do_not_grant_create_field/);
+  assert.match(operationOnlyCreateResult.output, /invalid_requested_identifiers_fail_closed|operation_deny_does_not_deny_read_derived_create_field/);
 
   const noParentResourceAdapter = writeAdapter(
     'no-parent-resource.mjs',
@@ -369,7 +363,7 @@ try {
   );
   const firstAllowOnlyResult = runSuite(firstAllowOnlyAdapter);
   assert.notEqual(firstAllowOnlyResult.status, 0);
-  assert.match(firstAllowOnlyResult.output, /create_with_named_hidden_exception|record_field_dimensions_are_independent|same_specificity_allow_fields_union/);
+  assert.match(firstAllowOnlyResult.output, /read_derived_create_with_named_hidden_exception|create_field_uses_meta_field_read_dimension|same_specificity_allow_fields_union/);
 
   const fuzzySystemFieldAdapter = writeAdapter(
     'fuzzy-system-field.mjs',
@@ -396,8 +390,8 @@ try {
   const auditEditGuardAdapter = writeAdapter(
     'audit-edit-guard.mjs',
     correctAdapterSource.replace(
-      "export const canUpdateEntityField = (access, entityKey, fieldKey) => fieldAllowed(access, entityKey, fieldKey, 'data.record.update', new Set(['*', 'editable']));",
-      "export const canUpdateEntityField = (access, entityKey, fieldKey) => fieldKey !== 'create_time' && fieldAllowed(access, entityKey, fieldKey, 'data.record.update', new Set(['*', 'editable']));",
+      "export const canUpdateEntityField = (access, entityKey, fieldKey) => effectiveFieldAllowed(access, entityKey, fieldKey, 'data.record.update');",
+      "export const canUpdateEntityField = (access, entityKey, fieldKey) => fieldKey !== 'create_time' && effectiveFieldAllowed(access, entityKey, fieldKey, 'data.record.update');",
     ),
   );
   const auditEditGuardResult = runSuite(auditEditGuardAdapter);
@@ -407,13 +401,63 @@ try {
   const bulkUsesSingleUpdateAdapter = writeAdapter(
     'bulk-uses-single-update.mjs',
     correctAdapterSource.replace(
-      "fieldAllowed(access, entityKey, fieldKey, 'data.record.bulkUpdate', new Set(['*', 'editable']))",
-      "fieldAllowed(access, entityKey, fieldKey, 'data.record.update', new Set(['*', 'editable']))",
+      "effectiveFieldAllowed(access, entityKey, fieldKey, 'data.record.bulkUpdate')",
+      "effectiveFieldAllowed(access, entityKey, fieldKey, 'data.record.update')",
     ),
   );
   const bulkUsesSingleUpdateResult = runSuite(bulkUsesSingleUpdateAdapter);
   assert.notEqual(bulkUsesSingleUpdateResult.status, 0);
   assert.match(bulkUsesSingleUpdateResult.output, /bulk_update_field_access_is_independent_from_single_update/);
+
+  const restrictionMutations = [
+    ['ignore-metadata-read-restrictions',
+      "const restrictionKeys = ['meta.field.read', 'data.record.read', 'data.record.update', 'data.record.bulkUpdate'];",
+      "const restrictionKeys = ['data.record.read', 'data.record.update', 'data.record.bulkUpdate'];",
+      /read_dimension_access_states|valid_field_access_state_lists_are_preserved|raw_effective_restrictions_survive_record_write_allow/],
+    ['ignore-record-read-restrictions',
+      "const restrictionKeys = ['meta.field.read', 'data.record.read', 'data.record.update', 'data.record.bulkUpdate'];",
+      "const restrictionKeys = ['meta.field.read', 'data.record.update', 'data.record.bulkUpdate'];",
+      /raw_effective_restrictions_survive_record_write_allow/],
+    ['ignore-bulk-restrictions-for-single-writes',
+      "const restrictionKeys = ['meta.field.read', 'data.record.read', 'data.record.update', 'data.record.bulkUpdate'];",
+      "const restrictionKeys = ['meta.field.read', 'data.record.read', 'data.record.update'];",
+      /raw_effective_restrictions_survive_record_write_allow/],
+    ['specific-resource-drops-parent-restriction',
+      "const groups = rows.flatMap((row) => ['*', fieldKey]",
+      "const mostSpecificRows = rows.filter((row) => score(row.resource) === Math.max(...rows.map((entry) => score(entry.resource))));\n      const groups = mostSpecificRows.flatMap((row) => ['*', fieldKey]",
+      /raw_effective_restrictions_survive_record_write_allow/],
+    ['named-overrides-untrusted-wildcard',
+      ".filter((key) => Object.hasOwn(row.fieldAccess, key))",
+      ".filter((key) => Object.hasOwn(row.fieldAccess, key) && (key === fieldKey || !Object.hasOwn(row.fieldAccess, fieldKey)))",
+      /raw_merged_wildcard_restrictions_cannot_be_overridden_by_named_editable/],
+    ['ignore-array-restriction-after-editable',
+      "const states = groups.flatMap((group) => group);",
+      "const states = groups.flatMap((group) => group.slice(0, 1));",
+      /raw_state_arrays_preserve_any_restriction|valid_field_access_state_lists_are_preserved/],
+    ['positive-field-state-is-required',
+      "return !states.some((state) => restrictions.has(state));",
+      "return states.length > 0 && !states.some((state) => restrictions.has(state));",
+      /bulk_update_field_access_is_independent_from_single_update|raw_missing_field_restriction_defaults_editable_inside_gate/],
+    ['record-gate-is-omitted',
+      "if (!isValidRequestedIdentifier(fieldKey) || !canUseEntityOperation(access, entityKey, operation)) return false;",
+      "if (!isValidRequestedIdentifier(fieldKey) || !isValidRequestedIdentifier(entityKey)) return false;",
+      /create_field_uses_meta_field_read_dimension|field_metadata_read_is_independent_from_business_values|record_update_revoke_and_restore_rechecks_gate/],
+    ['create-only-state-is-ignored-for-existing-records',
+      "if (groups.some((states) => states.length > 0 && states.every((state) => state === 'creatable'))) return false;",
+      "// regression: create-only state ignored",
+      /legacy_create_only_field_is_not_readable_or_editable/],
+    ['decision-envelope-is-coerced-into-raw-rows',
+      "const inputPermissions = source?.permissions;",
+      "const inputPermissions = source?.permissions ?? (source?.effect === 'allow' ? [{ ...source, permissionKey: 'data.record.update', resource: APP + '/entity/order' }] : undefined);",
+      /decision_envelopes_are_not_raw_principal_rows/],
+  ];
+  for (const [name, original, replacement, expectedCase] of restrictionMutations) {
+    assert.ok(correctAdapterSource.includes(original), name + ': mutation anchor must exist');
+    const mutantAdapter = writeAdapter(name + '.mjs', correctAdapterSource.replace(original, replacement));
+    const mutantResult = runSuite(mutantAdapter);
+    assert.notEqual(mutantResult.status, 0, name + ': regression must be rejected');
+    assert.match(mutantResult.output, expectedCase, name + ': a behavioral case must detect the mutation');
+  }
 
   const incompleteAdapter = writeAdapter('incomplete.mjs', 'export const normalizeAccess = (payload) => payload;');
   const incompleteResult = runSuite(incompleteAdapter);
@@ -421,7 +465,7 @@ try {
   assert.match(incompleteResult.output, /adapter_function_missing/);
 
   console.log(correctResult.output.trim());
-  console.log('permission-conformance-suite tests: PASS');
+  console.log(`permission-conformance-suite tests: PASS (${suiteRunCount} adapter runs, ${restrictionMutations.length} effective-restriction mutations)`);
 } finally {
   fs.rmSync(tempRoot, { force: true, recursive: true });
 }
@@ -433,6 +477,7 @@ function writeAdapter(name, source) {
 }
 
 function runSuite(adapterPath, flags = []) {
+  suiteRunCount += 1;
   const result = spawnSync(process.execPath, [suiteScript, adapterPath, ...flags], {
     encoding: 'utf8',
   });

@@ -63,7 +63,7 @@ Never log Cookie, Authorization, token, API key, or full signed URL values.
 
 ## Response and field access
 
-Preserve the stable IAM response envelope and select/normalize App permission rows at the UI boundary. A representative response is:
+Preserve the stable IAM response envelope and select/normalize App permission rows at the UI boundary. The following is a **raw legacy principal-profile example**, not a final v3 Decision; `creatable` belongs only to the retained ordinary-create profile:
 
 ```json
 {
@@ -80,22 +80,23 @@ Preserve the stable IAM response envelope and select/normalize App permission ro
       "permissionKey": "data.record.create",
       "resource": "make://<tenantId>/*/app/<appKey>/entity/<entityKey>",
       "effect": "allow",
-      "fieldAccess": { "create_only_field": "creatable" }
+      "fieldAccess": {}
     },
     {
       "permissionKey": "meta.field.read",
       "resource": "make://<tenantId>/*/app/<appKey>/entity/<entityKey>",
       "effect": "allow",
       "fieldAccess": {
+        "create_only_field": "creatable",
         "visible_field": "readonly",
-        "editable_field": "readonly"
+        "editable_field": "editable"
       }
     },
     {
       "permissionKey": "data.record.read",
       "resource": "make://<tenantId>/*/app/<appKey>/entity/<entityKey>",
       "effect": "allow",
-      "fieldAccess": { "visible_field": "readonly", "editable_field": "readonly" }
+      "fieldAccess": { "visible_field": "readonly", "editable_field": "editable" }
     },
     {
       "permissionKey": "data.record.update",
@@ -114,22 +115,22 @@ Preserve the stable IAM response envelope and select/normalize App permission ro
 to access-state strings or arrays. States such as `readonly` and `editable` are
 property values; neither `fieldAccess` nor these states extend the permission key.
 
-Consume each matched permission result's `fieldAccess` property by permission dimension:
+Read [design and protocol profiles](design-and-protocol-profiles.md) for the v3.0.0 (2026-08-04) source and the current raw-row compatibility boundary. Preserve this principal proxy; do not fabricate a Decision response or infer exact Statement grouping from a permission row.
 
-- `meta.entity.read`: entity metadata permission only; use it to include a Schema-present entity in navigation and allow its object route. It does not grant field visibility or record values.
-- `meta.field.read`: field-definition/Schema/table-header visibility only. It never grants record values or business writes.
-- `meta.field.create`, `meta.field.update`, and `meta.field.delete`: existing field-metadata permissions for creating/updating/deleting field definitions. They do not authorize new records or record-field value changes; ordinary App data helpers need not consume them.
-- `data.record.read`: authorize list/detail/pagination operations and apply its `fieldAccess` readable states to business values inside the metadata-visible Schema field set. Preserve masked states. It must not remove metadata-authorized headers when record access is denied.
-- `data.record.create`: authorize create route/entry/handler/submit and intersect `createFields` with fields whose states in the matched result's `fieldAccess` property include `creatable` or `*` for ordinary create. Approval create uses Workflow start-config field authorization instead, retaining its operation gate.
-- `data.record.update`: single-edit operation and `fieldAccess` property (allowed states: `editable` or `*`) for already-readable business-value fields.
-- `data.record.bulkUpdate`: independent batch-edit operation and its own `fieldAccess` property (allowed states: `editable` or `*`); never borrow `data.record.update` field authorization.
-- Operation and field evaluation share the matching record permission decision, but remain separate checks: an operation allow cannot bypass a named field restriction or the relevant Schema upper bound.
+- `meta.entity.read`: entity metadata navigation/route gate, bounded by Schema; no record operation grant.
+- `meta.field.read`: Schema/header visibility and applicable field restrictions. Under the retained **legacy ordinary-create** profile only, its historical `creatable|readonly|editable|partialMask|fullMask|*` states select fields inside `createFields`.
+- `meta.field.create`, `meta.field.update`, and `meta.field.delete`: field-definition permissions. They are not business-record write prerequisites; the cited design likewise does not require `data.field.update`.
+- `data.record.read`: record request gate plus applicable field restrictions; never hide authorized metadata headers merely because rows are denied.
+- `data.record.create`: create route/entry/handler/submit gate. This edit correction retains legacy create field selection from `meta.field.read`, instead of moving it into this operation row or narrowing states. Approval create still uses authorized Workflow start-config fields with the operation gate.
+- `data.record.update`, `data.record.bulkUpdate`, `data.record.delete`: independent operation gates. Existing-record editing additionally uses effective field states from applicable metadata-read and record read/write rows, Schema, and editor capability. Never choose one operation row's editable state to defeat another applicable readonly/hidden/mask restriction.
 
-In this App-scoped principal snapshot, an allow row with empty `fieldAccess` is unrestricted for that permissionKey at its resolved resource specificity. A matching deny wins. Named field entries override a wildcard field baseline. This principal-snapshot convention does not imply that an empty final Data API write decision allows submitted fields; the backend remains the final authority.
+For existing-record writes, conservatively merge baseline and named restrictions from raw rows without confirmed Statement provenance, including restrictive array entries. Any applicable readonly/hidden/mask rejects writing even alongside editable or compatibility `*`. Empty/omitted raw field restrictions add no restriction; they do not grant a missing operation or cancel a sibling restriction. Legacy create retains its prior range/union/named-field behavior separately. An authoritative v3 Decision's field map is already final; do not run raw-row inference over it.
+
+The Service must reject the entire update/bulk mutation if any attempted field is restricted or unauthorized, retaining the user's draft and never silently trimming the change into a success. Backend row conditions and final authorization remain authoritative; the design's final `readonlyFields` contract must not be invented on a raw principal response.
 
 Do not make the UI readiness transition depend on every row returned by IAM. Apply the deterministic selection table in `permission-boundaries.md` before strict row validation: only clearly unrelated rows may be ignored, while selected and unclassifiable rows fail closed. Ignored rows must never grant or deny App access or block the subsequent Schema request. Keep the Service request App-scoped; local response selection is not a reason to add a tenant-root scope or upstream platform permission filter.
 
-For selected current-App business rows, keep an omitted/empty `fieldAccess` distinct from malformed IAM data. An omitted property or empty object is unrestricted; explicit `null`, a non-object, an array, a blank field key, an empty state list, an unknown state, or a state list containing non-strings is invalid and must fail the whole access snapshot closed at the Service validation or UI normalization boundary. Do not silently discard a malformed selected row while keeping sibling allows. Also reject a selected row with an invalid effect, non-three-part permissionKey, arbitrary namespace, or wildcard tenant/App resource instead of guessing intent. Null/primitive payloads or rows and non-array `permissions` must produce a denied snapshot without throwing.
+For selected current-App business rows, keep an omitted/empty `fieldAccess` distinct from malformed IAM data. An omitted property or empty object adds no restriction from that row and does not cancel sibling restrictions; explicit `null`, a non-object, an array, a blank field key, an empty state list, an unknown state, or a state list containing non-strings is invalid and must fail the whole access snapshot closed at the Service validation or UI normalization boundary. Do not silently discard a malformed selected row while keeping sibling allows. Also reject a selected row with an invalid effect, non-three-part permissionKey, arbitrary namespace, or wildcard tenant/App resource instead of guessing intent. Null/primitive payloads or rows and non-array `permissions` must produce a denied snapshot without throwing.
 
 The Service preserves resources such as `make://<tenantId>/*/app/<appKey>`; UI segment matching treats that namespace wildcard as the same current App family represented by response scope.
 

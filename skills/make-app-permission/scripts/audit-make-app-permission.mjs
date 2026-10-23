@@ -6,7 +6,7 @@ import path from 'node:path';
 const USAGE = `Usage:
   node skills/make-app-permission/scripts/audit-make-app-permission.mjs <project-root>
 
-Checks Make App single-app permission enforcement, including record operation fieldAccess and schema-derived create fields. This is a static contract audit; it does not replace Service/UI tests.`;
+Checks Make App single-app permission enforcement, including record operation gates, effective field restrictions, and schema-derived create fields. This is a static contract audit; it does not replace Service/UI tests.`;
 
 const args = process.argv.slice(2);
 if (args.includes('--help') || args.includes('-h')) {
@@ -160,13 +160,13 @@ function checkUiContract() {
     failures.push('operation_helper_missing: UI must have a helper to evaluate entity operation permission');
   }
   if (!/(canReadEntityField|readableFieldKeysForEntity)/.test(uiRuntimeText)) {
-    failures.push('field_visibility_helper_missing: UI must evaluate record field values from the fieldAccess property of matched data.record.read results');
+    failures.push('field_visibility_helper_missing: UI must evaluate current record field visibility and effective field restrictions');
   }
   if (!/(canUpdateEntityField|editableFieldKeysForEntity|editableFieldNames)/.test(uiRuntimeText)) {
-    failures.push('field_edit_helper_missing: UI must evaluate record field editability from the fieldAccess property of matched data.record.update results');
+    failures.push('field_edit_helper_missing: UI must evaluate effective field restrictions within the permitted record operation');
   }
   if (!/(canCreateEntityField|creatableFieldKeysForEntity)/.test(uiRuntimeText)) {
-    failures.push('create_field_permission_helper_missing: UI must evaluate create fields from the fieldAccess property of matched data.record.create results');
+    failures.push('create_field_permission_helper_missing: UI must preserve the existing legacy createFields fieldAccess source');
   }
   if (
     ['canUseEntityOperation', 'canCreateEntityField', 'canReadEntityField', 'canUpdateEntityField', 'canBulkUpdateEntityField']
@@ -180,23 +180,14 @@ function checkUiContract() {
       `field_access_state_stringified: preserve fieldAccess state arrays instead of coercing them to text (${stringificationFiles.join(', ')})`,
     );
   }
-  for (const [functionName, permissionKeyPattern, permissionKey, required] of [
-    ['canCreateEntityField', /(?:DATA_RECORD_CREATE|data\.record\.create)/, 'data.record.create', true],
-    ['canReadEntityField', /(?:DATA_RECORD_READ|data\.record\.read)/, 'data.record.read', false],
-    ['canUpdateEntityField', /(?:DATA_RECORD_UPDATE|data\.record\.update)/, 'data.record.update', false],
-    ['canBulkUpdateEntityField', /(?:DATA_RECORD_BULK_UPDATE|data\.record\.bulkUpdate)/, 'data.record.bulkUpdate', false],
-  ]) {
-    const functionSources = extractNamedFunctionSources(uiRuntimeText, functionName);
-    if ((required || functionSources.length > 0) && !namedFunctionUsesPermissionKey(uiRuntimeText, functionName, permissionKeyPattern)) {
-      failures.push(`field_permission_key_missing: ${functionName} must evaluate fieldAccess on the matched ${permissionKey} permission result`);
-    }
-    if (namedFunctionUsesPermissionKey(
-      uiRuntimeText,
-      functionName,
-      /(?:META_FIELD_(?:CREATE|READ|UPDATE)|meta\.field\.(?:create|read|update))/,
-    )) {
-      failures.push(`field_permission_uses_metadata_dimension: ${functionName} must not grant record field access from meta.field.*`);
-    }
+  if (!namedFunctionUsesPermissionKey(uiRuntimeText, 'canCreateEntityField', /(?:META_FIELD_READ|meta\.field\.read)/)) {
+    failures.push('create_field_permission_key_missing: legacy createFields must preserve the meta.field.read fieldAccess source');
+  }
+  if (namedFunctionUsesPermissionKey(uiRuntimeText, 'canCreateEntityField', /(?:META_FIELD_(?:CREATE|UPDATE)|meta\.field\.(?:create|update))/)) {
+    failures.push('create_field_permission_uses_wrong_field_dimension: legacy createFields must not use metadata create/update grants');
+  }
+  if (hasIndependentFieldUpdateGate(uiRuntimeText)) {
+    failures.push('independent_field_update_gate: business writes must use record update/bulkUpdate gates and effective field restrictions without requiring meta.field.update or data.field.update');
   }
   if (
     extractNamedFunctionSources(uiRuntimeText, 'canReadEntityFieldMetadata').length > 0
@@ -303,6 +294,41 @@ function namedFunctionUsesPermissionKey(text, functionName, permissionKeyPattern
   return extractNamedFunctionSources(text, functionName).some((source) =>
     permissionKeyPattern.test(source),
   );
+}
+
+function hasIndependentFieldUpdateGate(source) {
+  const independentFieldUpdate = /\b(?:META_FIELD_UPDATE|DATA_FIELD_UPDATE)\b|['"](?:meta|data)\.field\.update['"]/;
+  const writeHelper = /(?:can(?:Update|Edit|BulkUpdate).*?(?:Field|Cell)|editableField|resolve.*(?:Writable|Editable))/i;
+  const declaredNames = [...source.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(|\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/g)]
+    .map((match) => match[1] ?? match[2]);
+  const pending = declaredNames.filter((name) => writeHelper.test(name) && !/(?:Schema|Metadata)/i.test(name));
+  const writeEntryExpressions = [...source.matchAll(/\b(?:const|let|var)\s+((?:can(?:Update|Edit|BulkUpdate)\w*|(?:update|batch|bulk)?Editable\w*))\s*=\s*([^;\n]+)/gi)]
+    .filter((match) => !/(?:Schema|Metadata)/i.test(match[1]))
+    .map((match) => match[2]);
+  const visited = new Set();
+  const expressions = [...writeEntryExpressions];
+
+  while (pending.length > 0 || expressions.length > 0) {
+    const functionName = pending.pop();
+    if (functionName && visited.has(functionName)) continue;
+    if (functionName) {
+      visited.add(functionName);
+      expressions.push(...extractNamedFunctionSources(source, functionName));
+    }
+    const expression = expressions.pop();
+    if (!expression) continue;
+    const codeExpression = maskJavaScriptNonCode(expression);
+    if (findPatternMatches(expression, independentFieldUpdate).some((match) => {
+      const index = match.index ?? 0;
+      return /\S/.test(codeExpression[index] ?? '')
+        && !isDiagnosticCallArgument(codeExpression.slice(0, index));
+    })) return true;
+    for (const name of declaredNames) {
+      const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (new RegExp(String.raw`\b${escapedName}\s*\(`).test(codeExpression) && !visited.has(name)) pending.push(name);
+    }
+  }
+  return false;
 }
 
 function namedFunctionAlwaysReturnsTrue(text, functionName) {

@@ -33,15 +33,11 @@ edit for multiple selection. Having `data.record.update` without
 `data.record.bulkUpdate` must not expose batch edit. Delete never implies either
 update permission.
 
-Use the `meta.field.read` permission for field-definition/table-header visibility.
-For business-value visibility, inspect the `fieldAccess` property on the matched
-`data.record.read` permission result. For single edit, inspect that property on
-the matched `data.record.update` result; batch edit independently uses the matched
-`data.record.bulkUpdate` result. Both edit dimensions allow `editable` or `*`.
-`fieldAccess` is a result property, and these state values are not permission keys.
-Metadata-write permissions such as `meta.field.update` edit field definitions and
-grant no business-value edits. Do not use field counts to infer record-operation
-permission.
+Use `meta.field.read` for metadata visibility, and the record-read gate plus effective restrictions for business values. Existing-record single/bulk writes require the requested independent operation and effective writable field state, never `meta.field.update` or an invented `data.field.update` prerequisite. Follow [design and protocol profiles](../../make-app-permission/references/design-and-protocol-profiles.md), based on PermissionDesign v3.0.0 (2026-08-04).
+
+In the current raw principal profile, applicable metadata-read and record read/write restrictions all participate. Do not grant a batch field merely because one bulkUpdate row contains editable. Preserve readonly/hidden/mask restrictions from other applicable rows and restrictive array entries, even beside editable or compatibility `*`. Raw rows may lose Statement identity; without confirmed provenance retain named and baseline restrictions within and across rows. Only confirmed Statement groups support named-over-own-baseline; cross-Statement restrictions take the strictest state.
+
+`fieldAccess` is a result property; state values are not permission keys. Default editable stays inside allowed record/Schema/capability bounds. Do not use field counts to infer record-operation permission. Ordinary create keeps its separate legacy profile and approval exception.
 
 ## Action state
 
