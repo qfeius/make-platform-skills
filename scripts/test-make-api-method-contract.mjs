@@ -34,7 +34,7 @@ assert.match(
 const assertNoDefaultFetchForMakePath = (content, pathPattern, label) => {
   const lines = content.split('\n');
   lines.forEach((line, index) => {
-    if (!/fetch\(/.test(line) || !pathPattern.test(line)) return;
+    if (!/(?:fetch|makeFetch)\(/.test(line) || !pathPattern.test(line)) return;
     const snippet = lines.slice(index, index + 8).join('\n');
     assert.match(
       snippet,
@@ -67,12 +67,12 @@ assert.match(
 
 assert.doesNotMatch(
   serviceAuth,
-  /fetch\(`\$\{localPreviewBaseUrl\}\/meta\/v1\/schema`,\s*\{\s*headers:/,
+  /(?:fetch|makeFetch)\(`\$\{localPreviewBaseUrl\}\/meta\/v1\/schema`,\s*\{\s*headers:/,
   'make-app-auth local-preview schema fetch must not rely on default GET',
 );
 assert.match(
   serviceAuth,
-  /schemaHeaders\.set\('X-Make-Target',\s*'MakeService\.GetResource'\);[\s\S]*fetch\(`\$\{localPreviewBaseUrl\}\/meta\/v1\/schema`,\s*\{[\s\S]*method:\s*'POST'[\s\S]*headers:\s*schemaHeaders[\s\S]*body:\s*JSON\.stringify\(\{\s*appKey:/,
+  /schemaHeaders\.set\('X-Make-Target',\s*'MakeService\.GetResource'\);[\s\S]*makeFetch\(`\$\{localPreviewBaseUrl\}\/meta\/v1\/schema`,\s*\{[\s\S]*method:\s*'POST'[\s\S]*headers:\s*schemaHeaders[\s\S]*body:\s*JSON\.stringify\(\{\s*appKey:/,
   'make-app-auth local-preview schema fetch must use POST, target header, and appKey body',
 );
 assertNoDefaultFetchForMakePath(

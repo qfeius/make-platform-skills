@@ -53,6 +53,15 @@ try {
   });
 
   assert.match(runAudit(goodRoot), /status: PASS/);
+  assert.match(runAudit(goodRoot), /auth_app_key_context_not_obvious/);
+
+  const configuredProxyRoot = createFixture('configured-auth-app-key', {
+    ui: fs.readFileSync(path.join(goodRoot, 'apps/ui/src/app.ts'), 'utf8'),
+    service: fs.readFileSync(path.join(goodRoot, 'apps/service/src/app.ts'), 'utf8')
+      .replace('const url = new URL(req.url);', "const url = new URL(req.url); url.searchParams.set('appKey', config.appKey);"),
+  });
+  assert.match(runAudit(configuredProxyRoot), /status: PASS/);
+  assert.doesNotMatch(runAudit(configuredProxyRoot), /auth_app_key_context_not_obvious/);
 
   // Project-local audit tools carry diagnostic route strings, not runtime routes.
   write(path.join(goodRoot, 'scripts/audit-auth-contract.mjs'), fs.readFileSync(auditScript, 'utf8'));

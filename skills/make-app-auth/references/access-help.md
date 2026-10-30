@@ -35,7 +35,7 @@ Render denial before starting contact lookup; do not await help in auth bootstra
 ## Runtime contract
 
 - Browser: `GET /api/make/auth/app-administrators`; internal Service upstream: `/make/auth/app-administrators`.
-- Use the existing auth namespace proxy in Service-fronted Apps, preserving Cookie and trusted forwarded host/proto. Do not add a broad `/api/make/**` proxy or gate contact reads on business access/current-context returning 200.
+- Use the existing auth namespace proxy in Service-fronted Apps, preserving Cookie and trusted forwarded host/proto. Its shared proxy sets one query `appKey` from `MAKE_APP_KEY`, overriding browser values; follow `auth-app-context.md`. Do not add a broad `/api/make/**` proxy or gate contact reads on business access/current-context returning 200.
 - Server validates identity and a published, host-resolved App in the same tenant. Browser-supplied tenant/App selectors do not choose the directory. A business-denied user can read current-App contacts; this cannot authorize data access.
 - Success: `{code:200,data:{appAdministrators:[{userId,name,avatarUrl}]}}`, `Cache-Control: no-store`.
 - Missing/invalid identity: 401; tenant mismatch: 403; unknown/unpublished App: 404; identity verification unavailable: 503. Contact directory failures may safely return an empty list. No login redirect or session issuance from this endpoint.

@@ -17,10 +17,10 @@ try {
     'the executable auth contract regression must remain a continuous CI gate');
   const correct = runHost('correct');
   assert.equal(correct.status, 0, correct.output);
-  assert.match(correct.output, /18\/18 passed/);
+  assert.match(correct.output, /24\/24 passed/);
   const compatible = runHost('legacy', ['--legacy-envelope']);
   assert.equal(compatible.status, 0, compatible.output);
-  assert.match(compatible.output, /19\/19 passed/);
+  assert.match(compatible.output, /25\/25 passed/);
   for (const [variant, failingCase] of [
     ['envelope-only', 'bare_current_context_reaches_iam'],
     ['return-auth-instead-of-iam', 'bare_current_context_reaches_iam'],
@@ -30,12 +30,15 @@ try {
     ['mock-claims-required', 'bare_current_context_reaches_iam'],
     ['mock-admin-bypasses-iam', 'legacy_mock_claims_do_not_bypass_iam_denial'],
     ['unwrap-iam-success', 'bare_current_context_reaches_iam'],
+    ['app-binding-required', 'missing_app_context_uses_configured_iam_scope'],
+    ['app-binding-ignored', 'invalid_auth_other_app_is_502'],
+    ['internal-app-key-missing', 'bare_current_context_reaches_iam'],
   ]) {
     const result = runHost(variant, ['--legacy-envelope']);
     assert.notEqual(result.status, 0, `${variant} must not pass`);
     assert.match(result.output, new RegExp(`FAIL ${failingCase}:`), result.output);
   }
-  console.log('current-context conformance suite tests: PASS (2 valid hosts, 8 regression hosts)');
+  console.log('current-context conformance suite tests: PASS (2 valid hosts, 11 regression hosts)');
 } finally {
   fs.rmSync(fixtureRoot, { recursive: true, force: true });
 }
@@ -51,7 +54,9 @@ function runHost(variant, flags = []) {
         res.end(await upstream.text());
       };
       const invalid = () => { res.writeHead(502, { 'content-type': 'application/json' }); res.end('{}'); };
-      const auth = await fetchImpl(gatewayOrigin + '/make/auth/current-context', { method: 'GET', headers });
+      const authUrl = new URL('/make/auth/current-context', gatewayOrigin);
+      if (variant !== 'internal-app-key-missing') authUrl.searchParams.set('appKey', appKey);
+      const auth = await fetchImpl(authUrl, { method: 'GET', headers });
       if (auth.status !== 200) return variant === 'auth-failure-becomes-502' ? invalid() : send(auth);
       // This test host deliberately names its correct bare parser like a business helper.
       // Names and reusing the same response pointer are not evidence of a contract bug.
@@ -62,7 +67,10 @@ function runHost(variant, flags = []) {
       if (variant === 'envelope-only' && payload?.code !== 200) return send(auth);
       const identity = parseMakeSuccess(payload);
       if (!identity || typeof identity.userId !== 'string' || !identity.userId.trim() ||
-          typeof identity.tenantId !== 'string' || !identity.tenantId.trim() || identity.appId !== appKey) return invalid();
+          typeof identity.tenantId !== 'string' || !identity.tenantId.trim()) return invalid();
+      if (variant === 'app-binding-required' && identity.appId !== appKey) return invalid();
+      if (variant !== 'app-binding-ignored' && identity.appId != null && (
+          typeof identity.appId !== 'string' || (identity.appId.trim() && identity.appId !== appKey))) return invalid();
       if (variant === 'mock-claims-required' && (!identity.roles?.includes('app_admin') ||
           !identity.permissions?.includes(appKey + '.access'))) return invalid();
       if (variant === 'mock-admin-bypasses-iam' && identity.roles?.includes('app_admin')) return send(auth);

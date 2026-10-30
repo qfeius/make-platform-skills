@@ -15,6 +15,7 @@ Skill 内容以本仓库为单一真相源；makecli 通过 npx 分发，构建�
 
 修改 Skill 后运行 `node scripts/lint-skill-metadata.mjs` 及 `.github/workflows/skill-metadata-lint.yml` 中的契约测试；规则与可观测结果保持一致。
 
+2026-10-30：Service 统一为前端驱动及内部 Make 请求注入配置 appKey，覆盖认证和业务调用；保留代理边界、OAuth 和旧 App 身份兼容，不规定接口业务归属。
 2026-10-27：独立整理无权限管理员提示契约及回归；区分启动、内容和操作拒绝，保持旧 SDK/后端兼容，不包含审批与表格功能变更。
 2026-10-20：建立 main/beta 发布约定，README 补充配置、覆盖安装和 npx 分支来源。
 

@@ -147,6 +147,9 @@ if (inferredMode === 'service-fronted') {
   if (!hasAuthNamespaceProxy || !hasOauthNamespaceProxy) {
     failures.push('auth_proxy_missing: Service-fronted App must proxy /api/make/auth/** and /api/make/oauth/** as namespace-level routes to make-gateway');
   }
+  if (hasAuthNamespaceProxy && !/\.searchParams\s*\.\s*set\s*\(\s*[`'\"]appKey[`'\"]\s*,/.test(serviceText)) {
+    warnings.push('auth_app_key_context_not_obvious: verify the shared auth/oauth proxy sets one appKey from Service config; preserve OAuth values and cover it with behavior tests');
+  }
   if (hasBroadMakeGatewayPassthrough(serviceText)) {
     failures.push('service_fronted_catch_all_passthrough: Service-fronted App must not proxy broad /api/make/** traffic to make-gateway; keep auth/oauth namespace proxies and explicit /api/make/app/** business routes');
   }

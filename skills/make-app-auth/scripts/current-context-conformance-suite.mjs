@@ -30,6 +30,16 @@ const cases = [
   ['empty_legacy_claims_reach_iam', response(200, JSON.stringify({
     ...identity, roles: [], permissions: [], grantVersion: '',
   })), response(200, iamBody)],
+  ...[
+    ['missing', { userId: identity.userId, tenantId: identity.tenantId }],
+    ['empty', { ...identity, appId: '' }],
+    ['null', { ...identity, appId: null }],
+    ['blank', { ...identity, appId: '   ' }],
+  ].map(([label, context]) => [`${label}_app_context_uses_configured_iam_scope`,
+    response(200, JSON.stringify(context)), response(200, iamBody)]),
+  ['unbound_app_context_does_not_bypass_iam_denial',
+    response(200, JSON.stringify({ ...identity, appId: '' })),
+    response(403, '{"reason":"permission_denied","permissionKey":"meta.entity.read"}')],
   // Historical Mock claims are a negative fixture, never an authorization grant.
   ['legacy_mock_claims_do_not_bypass_iam_denial', response(200, JSON.stringify({
     ...identity, roles: ['app_admin'], permissions: [`${appKey}.access`], grantVersion: 'fallback:contract-fixture',
@@ -40,7 +50,8 @@ const cases = [
     ['invalid_json', '{'], ['null', 'null'], ['array', '[]'], ['primitive', '7'],
     ['missing_user', JSON.stringify({ tenantId: 'tenant-1', appId: appKey })],
     ['missing_tenant', JSON.stringify({ userId: 'user-1', appId: appKey })],
-    ['missing_app', JSON.stringify({ userId: 'user-1', tenantId: 'tenant-1' })],
+    ['numeric_app', JSON.stringify({ ...identity, appId: 7 })],
+    ['object_app', JSON.stringify({ ...identity, appId: {} })],
     ['blank_user', JSON.stringify({ ...identity, userId: ' ' })],
     ['numeric_tenant', JSON.stringify({ ...identity, tenantId: 1 })],
     ['other_app', JSON.stringify({ ...identity, appId: 'OtherApp' })],
@@ -83,7 +94,7 @@ async function runCase(authResponse, iamResponse, malformed) {
   try {
     const result = await new Promise((resolve, reject) => {
       const req = request({ hostname: '127.0.0.1', port: server.address().port,
-        path: '/api/make/app/principal/permission',
+        path: '/api/make/app/principal/permission?appKey=forged&appKey=second&tenantId=other',
         headers: { cookie, host, 'x-forwarded-host': 'untrusted.example.test' },
         signal: AbortSignal.timeout(3000) }, (res) => {
         const chunks = [];
@@ -98,6 +109,7 @@ async function runCase(authResponse, iamResponse, malformed) {
     assert.equal(calls.length, iamResponse ? 2 : 1, 'IAM must run only after a valid authenticated context');
     assert.equal(calls[0].url.origin, gatewayOrigin);
     assert.equal(calls[0].url.pathname, '/make/auth/current-context');
+    assert.deepEqual(calls[0].url.searchParams.getAll('appKey'), [appKey], 'internal auth queries must use the configured App, not browser selectors');
     assert.equal(calls[0].init.method ?? 'GET', 'GET');
     for (const call of calls) {
       const headers = new Headers(call.init.headers);
