@@ -2,7 +2,7 @@
 name: make-app-analytics
 description: "Use when a Make App PRD or iteration requests business reports, analytical charts, KPI cards, trends, composition, rankings, 数据分析/可视化, or fixes to existing analytics layout/request/performance behavior. Includes intent such as 看每月金额如何变化. Select the smallest useful surface from verified business metrics and data, then guide host–analytics-package integration. Does not own temporary CLI lookups, existing list totals, record-list grouping, print/export reports, IAM policy, or runtime conversational BI; ordinary App creation alone does not trigger analytics."
 metadata:
-  version: 0.1.15
+  version: 0.1.16
 ---
 
 # make-app-analytics
