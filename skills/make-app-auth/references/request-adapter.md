@@ -26,8 +26,8 @@ handling without swallowing the SDK error body or redirect-looping on ordinary
 do not add native `EventSource`, a parallel reconnect loop or a general raw-fetch
 exception. Read `make-ai-assistant` for versioned routes and Service scope.
 
-The auth audit resolves the UI workspace's installed TypeScript when it finds raw
-requests. Its narrow exemption checks an exported shared factory/constant typed
+The auth audit checks the UI workspace's compiler API capabilities when it finds raw
+requests, including official compatible entries for TypeScript 7; tooling setup and the complete local copy bundle are documented in [Project-local audit](../SKILL.md#project-local-audit). Its narrow exemption checks an exported shared factory/constant typed
 as the public `AgentAuthenticatedTransport` (including import aliases), its
 `request` method, cookie/signal/method/headers/body forwarding, manual redirects,
 and the original response status/headers/body. It follows local const bindings,

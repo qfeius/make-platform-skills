@@ -2,7 +2,7 @@
 name: make-app-runtime
 description: Use when generating, refactoring, reviewing, or debugging Make App project runtime structure, workspace manifests, Service runtime, local/dev scripts, build outputs, Docker/K8s image entrypoints, publish readiness, or packaging errors such as missing `apps/service/dist/server.js`. Covers `apps/` workspace contracts, `apps/ui/dist`, `apps/service` port/build/start contracts, runtime config file location, runtime artifact tests, forwarded host/proto header preservation, and publish gates that include auth, default Trace ID, and applicable permission audits. Does not cover UI layout, authentication implementation, Trace behavior, permission logic, Make adapter env semantics, DSL modeling, Make CLI resource deployment, or canvas-table internals.
 metadata:
-  version: 0.1.9
+  version: 0.1.10
 ---
 
 # make-app-runtime
@@ -94,7 +94,7 @@ For a new or explicitly migrated pnpm Service-fronted App, prefer a project-loca
 
 Recommended workspace scripts for a new or explicitly migrated pnpm App. Before adding these to `package.json`, copy or wrap the audit utilities into project-local `scripts/`; do not write user-specific skill install paths into generated projects. Do not copy these pnpm-specific scripts into a legacy npm/Yarn App without an explicit runtime migration.
 
-For the auth gate, copy the complete file pair listed in [make-app-auth's project-local audit](../make-app-auth/SKILL.md#project-local-audit), preserving its relative import. Update both files together; do not vendor only the entrypoint. Check its `--help` command loads before running the full audit. The auth Skill owns that dependency list.
+For the auth gate, copy the complete bundle listed in [make-app-auth's project-local audit](../make-app-auth/SKILL.md#project-local-audit), preserving file names and relative imports. Update every listed file together; do not vendor only the entrypoint. Check its `--help` command loads before running the full audit. The auth Skill owns the dependency list; follow that list without fixing the number of files here.
 
 ```json
 {

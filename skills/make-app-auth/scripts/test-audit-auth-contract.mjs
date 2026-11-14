@@ -6,8 +6,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-const testRequire = createRequire(path.resolve(process.argv[2] ?? process.env.MAKE_SKILL_TEST_DEPENDENCIES ?? '.', '__skill_tests__.cjs'));
-const parserRoot = path.dirname(testRequire.resolve('typescript/package.json'));
+import { loadTypeScriptCompiler } from './load-typescript-compiler.mjs';
+const dependencyWorkspace = process.argv[2] ?? process.env.MAKE_SKILL_TEST_DEPENDENCIES ?? '.';
+const testRequire = createRequire(path.resolve(dependencyWorkspace, '__skill_tests__.cjs'));
+const loadedParser = loadTypeScriptCompiler(dependencyWorkspace);
+const parserRoot = path.dirname(testRequire.resolve(loadedParser.name + '/package.json'));
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const auditScript = path.join(scriptDir, 'audit-auth-contract.mjs');
@@ -76,6 +79,37 @@ try {
   const bridgeFile = path.join(goodRoot, 'apps/ui/src/lib/service-api/agent-transport.ts');
   write(bridgeFile, byteBridge);
   assert.match(runAudit(goodRoot), /status: PASS/, 'narrow shared Agent byte bridge must allow a literal scoped URL');
+  for (const compatible of ['@typescript/typescript6', 'typescript-compiler-api', null]) {
+    const nativeRoot = createFixture('native-compiler-' + (compatible?.replaceAll('/', '-') ?? 'missing'), {
+      ui: fs.readFileSync(path.join(goodRoot, 'apps/ui/src/app.ts'), 'utf8'),
+      service: fs.readFileSync(path.join(goodRoot, 'apps/service/src/app.ts'), 'utf8'),
+    });
+    write(path.join(nativeRoot, 'apps/ui/src/bridge.ts'), byteBridge);
+    const modules = path.join(nativeRoot, 'apps/ui/node_modules');
+    fs.rmSync(path.join(modules, 'typescript'));
+    write(path.join(modules, 'typescript/package.json'), JSON.stringify({main: 'index.cjs'}));
+    write(path.join(modules, 'typescript/index.cjs'), 'module.exports={version:"7.0.2"};');
+    if (compatible) {
+      const target = path.join(modules, compatible);
+      fs.mkdirSync(path.dirname(target), {recursive:true});
+      fs.symlinkSync(parserRoot, target, 'junction');
+      assert.match(runAudit(nativeRoot), /status: PASS/, 'native TypeScript uses a compatible compiler API');
+      write(path.join(nativeRoot, 'apps/ui/src/bridge.ts'), byteBridge.replace("credentials: 'include'", "credentials: 'omit'"));
+      assert.match(runAudit(nativeRoot, {expectFailure:true}), /agent_bridge_unproven/, 'compatibility must not weaken the cookie check');
+    } else {
+      const output = runAudit(nativeRoot, {expectFailure:true});
+      assert.match(output, /agent_bridge_parser_missing.*compiler_api_unavailable/);
+      assert.doesNotMatch(output, /TypeError/);
+      assert.match(runAudit(nativeRoot, {compilerWorkspace:dependencyWorkspace}), /status: PASS/, 'an explicit compatible tooling workspace supports a native consumer');
+    }
+  }
+  const emptyTooling = path.join(tempRoot, 'empty-tooling');
+  fs.mkdirSync(emptyTooling);
+  for (const compilerWorkspace of [emptyTooling, path.join(emptyTooling, 'missing')]) {
+    const output = runAudit(goodRoot, {expectFailure:true,compilerWorkspace});
+    assert.match(output, /agent_bridge_parser_missing.*compiler_api_unavailable/, 'explicit invalid tooling must not fall back to a valid consumer');
+    assert.doesNotMatch(output, /TypeError/);
+  }
   write(bridgeFile, byteBridge.replace("fetch('/api/make/app/agent/v1/session/stream',", 'fetch(url,'));
   assert.match(runAudit(goodRoot), /status: PASS/, 'guarded canonical URL must also pass');
   const constantBridge = byteBridge.replace('export function makeAgentTransport(): ByteTransport {\n      return {', 'export const agentTransport: ByteTransport = {').replace(/\n    }\n  $/, '\n');
@@ -1158,7 +1192,8 @@ function runAudit(root, options = {}) {
       root,
       '--mode',
       'service-fronted',
-      '--published'
+      '--published',
+      ...(options.compilerWorkspace !== undefined ? ['--compiler-workspace=' + options.compilerWorkspace] : [])
     ], { encoding: 'utf8' });
   } catch (error) {
     if (options.expectFailure) {

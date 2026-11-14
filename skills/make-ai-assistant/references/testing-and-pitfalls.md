@@ -4,24 +4,34 @@
 
 先复现失败再实现。记录包实际版本、合同提交、测试命令与结果，不把静态审计等同端到端。
 
+先按[可移植工具](validation-tools.md)配置编译器 API，再分别执行基础包验证、终态通知、公开 UI 夹具和文档示例。终态通知或 UI 失败须单独列为未通过，不能被静态审计或其他通过项覆盖；正式 0.4.5 的通知缺陷见[包契约](package-integration.md#包缺陷与验收边界)。
+
 - 入口：使用真实包验证 webchat 请求不带 sort；0/1、409 冲突、403、部署未就绪、依赖失败；不查询管理详情、不按 key 重查资源 ID；异常不能回退管理列表。
 - 生命周期：StrictMode、普通导航、关闭重开、用户/租户/App 切换、快速 A→B→A、迟到响应；真实 app.id 缺失、字符串/数值归一、权限刷新与失败。
 - 字节桥：认证凭据、同源路径、multipart bytes/boundary、取消与超限、原始响应/headers、401/403、唯一重试、未消费响应取消、reader 释放、Trace 恰好收束一次。
-- Service：25 项 method/path/Target 组合逐项执行真实 handler；公开 assertAgentRequest 接受/拒绝样本，错误 action、重复/原型键 query、Origin、跨 App/filter（括号逃逸、注释、转义与额外过滤拒绝）、input-capabilities source、Session 来源；preview/published 上游前缀及 auth helper。验证 8 项额外控制面操作被拒绝。
+- Service：25 项 method/path/Target 组合逐项执行真实 handler；公开 assertAgentRequest 接受/拒绝样本，包含重建 filter 前原始请求的非法嵌套字段，错误 action、重复/原型键 query、Origin、跨 App/filter（括号逃逸、注释、转义与额外过滤拒绝）、input-capabilities source、Session 来源；preview/published 上游前缀及 auth helper。验证 8 项额外控制面操作被拒绝。
 - HTTP：数字 code/msg/data 信封、HTTP/业务错误分别保留、未知 reason、坏 JSON/HTML、重定向、401/403 清洗、SSE 即时转发、文件下载原字节、断开取消。
-- 会话：历史/重命名/置顶/归档、首条创建、请求未知结果、队列/取消/追加、停止受理与终态、问题回答、反馈、stream delta/正式事件/asOf 恢复。调用包真实 API，不在测试里复制状态机来证明它正确。
+- 会话：历史/重命名/置顶/归档、输入预建与首次发送复用、请求未知结果、队列/取消/追加、停止受理与终态、问题回答、反馈、stream delta/正式事件/asOf 恢复。调用包真实 API，不在测试里复制状态机来证明它正确。
+- 继承能力：未知写入遇到网络中断/5xx 时实际写入恰好一次，随后查询原 requestId；回执 404/pending 不重写，401/403 保留鉴权状态与原意图。验证 Task 三种 waitReason 的显示、非 running 状态不携带该字段、SSE 内鉴权失败不残留活动进度；重连不重发原消息。通过公开 UI 验证草稿在同身份重开可恢复、跨身份不复用、敏感字段不持久化，以及普通本人会话历史可读取；不能从类型检查推定这些行为。
+- 0.4.5 升级：回答、停止、取消排队与继续消息在 503 + 回执 404/pending 后再次操作及控制器重建均不重写，requestId 与目标保持不变；已发出上传字节后暂停再试只查回执。通过公开问题 UI 验证异步回执收敛、操作身份不匹配时不误认、题面关闭不等于答案受理、冷恢复不展示默认值或草稿为已提交摘要。验证日期/范围/时间确认、取消与秒精度，消息时间线更新不丢焦点/滚动，思考默认折叠并保留手动选择，附件原生弹窗定位。
 - 图文：输入能力、原件 multipart、失败重试/移除、Content 引用发送、预览/下载；“上传成功”和“模型识图成功”分别记录。
 - UI：桌面默认入口、手机 launcher 插槽可用性、关闭重开、全屏/停靠、真实点击/焦点，无内部选择器覆盖。
 
-运行本 Skill 静态审计、verify-agent-package 及 verify-host-example，宿主定向 UI/Service 测试、类型检查、build、makecli preflight 和适用的 auth/permission/Trace/runtime 检查；保持项目现有运行时。未修改的能力不盲目重复全量测试。
+运行本 Skill 静态审计、verify-agent-package 及 verify-host-example，宿主定向 UI/Service 测试、类型检查、build、makecli preflight 和适用的 auth/permission/Trace/runtime 检查；保持项目现有运行时。verify-agent-package 通过正式包验证发现、上传元数据、Task 等待合同、低层及四种高层命令的未知写入只读恢复（含重建），以及已派发上传中断后的回执恢复；不加载包源码，不证明所有问题 UI 或真实后端能力。UI 行为须用真实公开组件另行验证，包缺陷单独报告，不通过兼容补丁掩盖。未修改的能力不盲目重复全量测试。
 
-维护审计脚本时执行 `node scripts/test-audit-make-ai-assistant-project.mjs "<workspace-with-typescript>"`；该参数仅用于定位测试解析器，测试项目在临时目录生成。CI 固定测试用 TypeScript 版本，不要求全局安装，也不向业务 App 增加运行时依赖。
+维护审计脚本时执行 `node scripts/test-audit-make-ai-assistant-project.mjs "<workspace-with-typescript>"`；该参数仅用于定位测试解析器，测试项目在临时目录生成。覆盖生产/开发/peer 声明、显式类型导入/导出（含 `/react`）、混合与动态运行时导入、缺少类型证明的拒绝，以及父子 workspace 的依赖与 UI 绑定隔离。CI 固定测试用 TypeScript 版本，不要求全局安装，也不向业务 App 增加运行时依赖。
+
+默认参数工厂的重赋值检查区分变量替换和属性写入：属性接收者、计算键、解构默认值中的读取不撤销工厂绑定；直接赋值、解构目标、循环目标和更新操作仍须拒绝。按符号识别同名 `var` 初始化（含解构）及循环声明；无初始化声明与其他作用域的同名变量不算参数覆盖。计算键或默认值中内嵌的真实参数赋值也不能漏检。
+
+消费发现回归同时使用正常 UI 和另一个消费 workspace，防止 UI 掩盖后者漏检；覆盖根入口、`/make-app`、反引号导入、计算型模板与不同包名前缀。检查仅开发/peer 声明及未声明依赖被拒绝、已有生产依赖且没有解析器的 Service 仍通过。旧 `/client` 单独存在不算新接入；反引号私有入口仍被拒绝，保留的旧调用仍提示人工复核。
+
+维护包验证器时执行 `node scripts/test-verify-agent-package.mjs "<consumer-workspace>"`。它加载真实公开包，在临时适配层注入不等式、额外 OR、其他 App 与额外 filter 字段，要求全部失败；正常包必须通过。发现范围按配置 App 的精确等值条件检查，不以关键词正则替代。测试不改已安装包、不访问后端，已接入 CI。
 
 ## 独立 fresh-agent forward test
 
-协议、接入流程或职责边界大改后，在隔离临时 App 进行独立新代理正向测试。只提供本 Skill、关联技能、已安装公开 0.4.2、认证 Shell/请求层/空 Service 骨架，以及来自固定合同源的 Gateway fixture。不能提供参考 App 实现、既有修复答案或提示预期漏洞。验证者仅在临时目录修改，不部署、不用真实凭据、不写远端。
+协议、接入流程或职责边界大改后，在隔离临时 App 进行独立新代理正向测试。只提供本 Skill、关联技能、已安装公开 0.4.5、认证 Shell/请求层/空 Service 骨架，以及来自固定合同源的 Gateway fixture。不能提供参考 App 实现、既有修复答案或提示预期漏洞。验证者仅在临时目录修改，不部署、不用真实凭据、不写远端。
 
-原始合同随 Skill 分发在 `scripts/fixtures/agent-v1/`：`openapi.json`、`data.openapi.json`、`events.schema.json` 和记录固定提交及逐文件 SHA-256 的 `source.json`。它们是合同 `7ddbacac599b3fc6780fb7f01f2cf466731c2369` 的不可改写快照，不从 Skill 操作清单反向生成，不依赖内部文档登录、包源码或参考 App。
+原始合同随 Skill 分发在 `scripts/fixtures/agent-v1/`：`openapi.json`、`data.openapi.json`、`events.schema.json` 和记录固定提交及逐文件 SHA-256 的 `source.json`。它们是合同 `1238c719e70ed80fd26976aedbc174bdff7998b4` 的不可改写快照，不从 Skill 操作清单反向生成，不依赖内部文档登录、包源码或参考 App。
 
 从 Skill 实际安装目录执行，目标必须是新的目录（只需 Node.js，无网络或额外依赖）：
 
@@ -41,4 +51,4 @@ node scripts/prepare-gateway-fixture.mjs "<isolated-app>/tests/contracts"
 
 分别说明：静态预检、合成协议/宿主行为、真实后端、模型、浏览器验收。未执行/跳过的测试列为未验证；不宣传“完整对接”覆盖未测能力。
 
-发现问题先归属：宿主路径/认证/字节丢失修宿主；公开包解析、生命周期/上传/SSE/UI 缺陷提交版本和最小复现给包维护者；服务端权限/部署/模型错误交平台。当前 0.4.2 client 替换的入口解析竞态见 package-integration，不在宿主添加兼容逻辑，也不因此修改包。
+发现问题先归属：宿主路径/认证/字节丢失修宿主；公开包解析、生命周期/上传/SSE/UI 缺陷提交版本和最小复现给包维护者；服务端权限/部署/模型错误交平台。包缺陷与已修复历史见 package-integration；不在宿主添加兼容逻辑，也不因此修改包。

@@ -2886,6 +2886,15 @@
             ],
             "description": "Harness 上报的本轮生命周期状态，见 3.1。\n例：completed。"
           },
+          "waitReason": {
+            "type": "string",
+            "enum": [
+              "user_input",
+              "outcome_confirmation",
+              "authentication"
+            ],
+            "description": "运行中确实等待时的用户可见原因；其他时候省略，不授予重试权限。"
+          },
           "endReason": {
             "type": [
               "object",
@@ -3066,6 +3075,27 @@
                     }
                   }
                 }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "not": {
+                    "const": "running"
+                  }
+                }
+              },
+              "required": [
+                "state"
+              ]
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "waitReason"
+                ]
               }
             }
           }
@@ -3799,6 +3829,15 @@
             ],
             "description": "Harness 上报的本轮生命周期状态，见 3.1。\n例：completed。"
           },
+          "waitReason": {
+            "type": "string",
+            "enum": [
+              "user_input",
+              "outcome_confirmation",
+              "authentication"
+            ],
+            "description": "运行中确实等待时的用户可见原因；其他时候省略，不授予重试权限。"
+          },
           "endReason": {
             "type": [
               "object",
@@ -3985,6 +4024,27 @@
                     }
                   }
                 }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "not": {
+                    "const": "running"
+                  }
+                }
+              },
+              "required": [
+                "state"
+              ]
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "waitReason"
+                ]
               }
             }
           }

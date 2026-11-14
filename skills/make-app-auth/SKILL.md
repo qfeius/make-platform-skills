@@ -2,7 +2,7 @@
 name: make-app-auth
 description: Use when generating, modifying, reviewing, or debugging Make App unified login and authenticated /api/make requests with @qfeius/make-app-auth. Covers unified login, OAuth/ngrok mode, 401/403 handling, logout, current-user/account-drawer auth wiring, current-context identity, Feishu-container logout visibility, cookies, sessions, redirect callbacks, and Make App auth troubleshooting. Preserve authenticated context for the default /api/make/app/principal/permission flow. Does not cover UI layout, account menu placement, page structure, build output, Service API contracts, permission logic, DSL modeling, or canvas-table internals; use makeui for account surfaces and make-app-permission for single-app permission enforcement.
 metadata:
-  version: 0.1.29
+  version: 0.1.30
 ---
 
 # make-app-auth
@@ -95,7 +95,7 @@ Local preview exception: a Service-fronted App may provide a Service-only local 
 5. Read `references/request-adapter.md` whenever generating or reviewing Make backend requests.
 6. Keep auth bootstrap thin. Business features must consume the project Make API adapter and auth state, not auth internals.
 7. Before claiming publish/login readiness, verify the auth path: current-context route, unified redirect, session callback, cookie-preserving business requests, and Service-fronted auth proxy when applicable.
-8. Run `scripts/audit-auth-contract.mjs <project-root> --published` for generated Apps when a project tree is available; use `--mode service-fronted` when the App keeps a Service layer. Raw-request analysis resolves the UI workspace's installed TypeScript; missing parser dependencies fail explicitly. The narrow Agent exemption and its evidence limits are described in [request-adapter](references/request-adapter.md).
+8. Run `scripts/audit-auth-contract.mjs <project-root> --published` for generated Apps when a project tree is available; use `--mode service-fronted` when the App keeps a Service layer. Raw-request analysis checks the UI workspace's compiler API capabilities and compatible official entries; missing capabilities fail explicitly. The narrow Agent exemption and its evidence limits are described in [request-adapter](references/request-adapter.md).
 9. When changing generated code, add or update tests for the touched auth path: unauthenticated session, expired session, 403, logout, unified-login redirect, callback proxy, business-request 401 handling, current-context identity normalization, or normal-browser/Feishu account visibility.
 
 ## Reference Selection
@@ -132,14 +132,15 @@ Audit expectations:
 
 ## Project-local audit
 
-For a project-owned publish gate, copy both files from this Skill's actual installation directory into the App workspace, preserving the names and relative import. Copy this complete pair when updating an existing audit; copying only the entrypoint will fail to load its module. Do not reference a developer's absolute Skill path in project scripts.
+For a project-owned publish gate, copy the complete bundle from this Skill's actual installation directory into the App workspace, preserving the names and relative imports. Copy every listed file when updating an existing audit; copying only the entrypoint will fail to load its modules. Do not reference a developer's absolute Skill path in project scripts.
 
 | Source under this Skill | Target under the App workspace |
 | --- | --- |
 | `scripts/audit-auth-contract.mjs` | `scripts/audit-auth-contract.mjs` |
 | `scripts/agent-byte-bridge-contract.mjs` | `scripts/agent-byte-bridge-contract.mjs` |
+| `scripts/load-typescript-compiler.mjs` | `scripts/load-typescript-compiler.mjs` |
 
-From that workspace, run `node scripts/audit-auth-contract.mjs --help` to check module loading, then run the full published audit against the App root. Module loading alone does not verify authentication. The raw-request analysis resolves the App UI's installed TypeScript, not a global parser. From this Skill's installation directory, `node scripts/test-auth-audit-portable-copy.mjs` verifies this table's copy procedure in an isolated workspace using only Node.js.
+From that workspace, run `node scripts/audit-auth-contract.mjs --help` to check module loading, then run the full published audit against the App root. Module loading alone does not verify authentication. The loader checks `typescript`, `@typescript/typescript6`, then the official `typescript-compiler-api` alias by required functions and enums. Keep the App's TypeScript 7/build; add a compatible official API only as a development tool (for example `typescript-compiler-api: npm:typescript@6.0.3`) or pass `--compiler-workspace=<tooling-workspace>`. An explicit tooling directory must exist and supply the API; failure reports `compiler_api_unavailable` without falling back to the consumer or scanning global/private installations. Logs distinguish package version from API version. From this Skill's installation directory, `node scripts/test-auth-audit-portable-copy.mjs` verifies this table's copy procedure in an isolated workspace using only Node.js.
 
 ## Collaboration With makeui
 

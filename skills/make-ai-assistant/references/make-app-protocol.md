@@ -1,6 +1,6 @@
 # Agent Public API v1 与 Service 边界
 
-核对来源：[接口总览](https://make-agent-design-1183132516685447241.make.qfei.cn/api-reference/overview)、正式包 0.4.2 的 `/agent` 生成类型和校验器。包固定合同源为 `agent-design/docs/contracts/public` 提交 `7ddbacac599b3fc6780fb7f01f2cf466731c2369`。网站与已安装包不一致时记录具体差异，不能擅自合成第三套协议。
+核对来源：[接口总览](https://make-agent-design-1183132516685447241.make.qfei.cn/api-reference/overview)、正式包 0.4.5 的 `/agent` 生成类型和校验器。包固定合同源为 `agent-design/docs/contracts/public` 提交 `1238c719e70ed80fd26976aedbc174bdff7998b4`。网站与已安装包不一致时记录具体差异，不能擅自合成第三套协议。
 
 ## 路径与操作
 
@@ -37,6 +37,8 @@ origin 只来自可信部署配置（既有 MAKE_API_BASE_URL/MAKE_SERVER_URL �
 ## 校验与范围
 
 Service 从部署配置读取 appKey，不信任 body/query 覆盖。按精确 method/path/action allowlist 处理后，复用同版本公开 `assertAgentRequest(operation,input)` 校验请求；操作名形如 `session.message.CreateResource`（斜杠转点），不是重新实现 SDK DTO。
+
+JSON 校验先作用于原始请求，再检查 App 范围并重建允许的常量 filter；不能先裁剪或规范化再校验，以免吞掉合同禁止的顶层或嵌套字段。保留公开合同明确允许的扩展，不自行放宽校验器。
 
 multipart 例外：`assertAgentRequest("content.CreateResource", metadata)` 只接收 `{requestId,fileName?,mediaType?}`，不传二进制 file 或 file 占位字符串；这个公开校验器已经移除了 multipart 的 file 字段。Service 另行验证恰好一个 file、大小、字段数量与重复项，再以 FormData 转发。不能套用生成类型里的 `N17Request.file:string`，也不必借用无关 Request 查询来校验 upload requestId。
 
