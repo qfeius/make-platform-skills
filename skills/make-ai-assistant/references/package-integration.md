@@ -1,16 +1,16 @@
-# 0.4.2 包契约
+# 0.4.5 包契约
 
 ## 安装与证据
 
-使用宿主现有的包管理器和锁文件，在 UI workspace 安装正式 `@qfei-design/make-ai-assistant@0.4.2`。Service 使用 `assertAgentRequest` 时也在 Service 的 dependencies 声明同版本，不能依赖 UI 的传递安装。核对 manifest、lockfile、实际 resolution 与发布构建提交；记录 registry 与 integrity。不要用本地 link、包源码、patch-package 或放宽校验代替正式包。
+使用宿主现有的包管理器和锁文件，在 UI workspace 安装正式 `@qfei-design/make-ai-assistant@0.4.5`。Service 使用 `assertAgentRequest` 时也在 Service 的 dependencies 声明同版本，不能依赖 UI 的传递安装。核对 manifest、lockfile、实际 resolution 与发布构建提交；记录 registry 与 integrity。不要用本地 link、包源码、patch-package 或放宽校验代替正式包。
 
-当前基线明确为 0.4.2。用户要求未来最新版本时先查询 registry，再核验实际公开契约；遇到不一致时报告版本和缺失符号，不猜测或切回旧协议。
+当前基线明确为 0.4.5。用户要求未来最新版本时先查询 registry，再核验实际公开契约；遇到不一致时报告版本和缺失符号，不猜测或切回旧协议。
 
 从安装包 export map 的 types 目标及其传递引用读取声明。公开字段以导出类型为准，内部源码/示例不能增加公开 API。
 
 | 公开入口 | App 接入使用 |
 | --- | --- |
-| `/agent` | `createAgentClient`、`AgentClient`、`AgentAuthenticatedTransport`、`AgentHttpRequest`、`assertAgentRequest`、`AgentApiError`、`AGENT_UPLOAD_LIMIT` |
+| `/agent` | `createAgentClient`、`AgentClient`、`AgentAuthenticatedTransport`、`AgentHttpRequest`、`assertAgentRequest`、`assertAgentResponse`、`AgentApiError`、`AGENT_UPLOAD_LIMIT` |
 | `/react` | `MakeAppAssistantEntry`、`MakeAppAssistantEntryProps`；低层面板仅在明确需要时使用 |
 | `/make-app` | `createMakeAppAssistantTransport`：已经确认 ID 的低层同步绑定；标准入口无需宿主调用 |
 | 根类型 | `MakeAssistantHostContext`、主题及通用公开类型 |
@@ -35,16 +35,18 @@ const client = createAgentClient({
 
 `MakeAppAssistantEntry` 负责入口解析、同步 transport 的 effect 创建/释放及 UI。不要为它再手工调用发现、管理详情、构造 bootstrap transport 或关闭 StrictMode。公开 `createMakeAppAssistantTransport` 也不再先异步读取旧 capabilities。
 
-## 从 0.4.1 升级到 0.4.2
+## 从 0.4.4 升级到 0.4.5
 
-已核对两个正式发布制品：公开入口、导出类型、生成 DTO/校验合同及所需 Node/React 范围保持兼容，固定合同快照不变。UI 与 Service 同时锁定 0.4.2；不迁移路由或增加兼容适配。0.4.2 调整了单独发布的追问正文与原用户消息的轮次关联；消息排序继续由包处理，宿主不导入内部辅助函数或重排消息。
+已核对 0.4.4 与 0.4.5 正式 npm 制品：公开入口、请求 DTO、Node/React 范围、固定公共合同 `1238c719e70ed80fd26976aedbc174bdff7998b4`、25 项 App 代理组合及原件 multipart 协议不变。UI 与 Service 同时锁定 0.4.5，同步锁文件、宿主 API 文档及版本断言。包新增精确依赖 `react-aria-components@1.22.1` 和 `@internationalized/date@3.12.4`，由包管理器解析；宿主不另建日期控件，不迁移既有运行时或路由，也不扩大权限与重试职责。
 
-升级后仍需验证入口身份切换、追问/排队的正文顺序及图文链路。Service 的部署范围和 multipart 元数据边界须按本 Skill 协议独立检查；包升级不会自动修复宿主已有的 CEL 拼接或误用校验器。
+0.4.5 修复回答、停止、取消排队与继续消息的未知结果恢复：再次操作或重建控制器后仅查询原 requestId，保留原目标身份；已发出字节的上传因暂停或断开而未确认时也不得重传。问题回执异步到达后由包收敛本地提交状态，按请求及操作身份确认；题面终态不能独立证明原答案已受理，冷恢复不得以默认值或当前草稿伪造已提交摘要。日期/范围/时间控件、统一时间线、滚动与思考折叠状态、附件原生弹窗定位均由包负责。详细行为和验证见[流与附件](make-app-stream-and-attachments.md)及[验证与交付](testing-and-pitfalls.md)。
+
+从更早版本升级时保留 0.4.3 引入的非敏感问答草稿隔离与本人 owner 范围，保留 0.4.4 引入的 Task/TaskView waitReason 和结构化连接鉴权状态。宿主不手动迁移包内恢复键，不将等待状态当成写入授权。Service App 范围、multipart 与认证字节桥仍须独立验收，包升级不会修复宿主 CEL 拼接或合同校验器误用。
 
 ## 包缺陷与验收边界
 
-已在正式 0.4.1 和 0.4.2 复现的包问题：同一个入口组件直接替换 client 时，发现结果可能在 effect 重置前短暂沿用旧 client 的 Agent，形成“新 client + 旧 Agent ID”的绑定尝试。应由包将解析结果与产生它的 client 关联后修复；宿主继续履行正常身份切换释放职责，不加专用发现兼容。尚无越权或数据泄露证据，需服务端独立鉴权。
+正式 0.4.5 仍存在终态失败通知缺失：公开 `CallOptions.onAttemptFailure` 在 Agent JSON、SSE、下载、并发及失败恢复路径未按合同登记/执行，包内错误可见不代表宿主全局 Trace 通知可用。运行[终态通知夹具](validation-tools.md#sdk-终态失败通知)可独立复现；当前 15 场景中成功重试/恢复 2 项通过，其余 13 项失败（含额外 JSON 协议失败）。此门禁保持失败，交包维护者修复，不以基础包验证通过替代、不复制宿主补丁，也不将当前基线称为全部 Agent 能力已验收。
 
-包导出类型通过、App 测试通过、发布 Ready、真实对话/识图成功是不同证据。不能用其中一个代替另一个；标题含旧版本文字通常是会话 title，而非运行包版本。
+旧版高层答案在回执 404 后重复 POST 的问题，以及无入口写成 `entry: null` 的文档冲突，已在 0.4.5 修复；当前受限列表为空使用 `data: []`。不再沿用旧版缺陷豁免、拦截器或 entry:null 兼容。已修复的入口发现竞态也不作为当前未修问题。
 
-0.4.2 的部分随包能力描述和旧接入 recipe 仍引用 `/client` 或不同操作数量，不能视作当前 `/agent` 的协议。接入以公开 `/agent` 类型、校验器及本 Skill 固定合同为准；发现文档差异应报告给包维护者，不在宿主拼接第三套协议。
+宿主仍需在身份变化时释放旧 client、阻止迟到响应，并保持服务端鉴权。包修复不取代这些职责。新发现的包问题必须记录正式版本、最小复现、实际结果、预期与影响，交给包维护者；不修改包源码、node_modules 或复制包状态机。验证通过的范围与未执行的真实后端、模型和浏览器验收分别报告，不把历史问题已修等同于全部能力无缺陷。

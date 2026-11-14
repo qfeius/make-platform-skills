@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
-import { createRequire } from 'node:module';
+import { loadTypeScriptCompiler } from './load-typescript-compiler.mjs';
 import { auditRawMakeFetches } from './agent-byte-bridge-contract.mjs';
 
 const SDK_PACKAGE_NAME = '@qfeius/make-app-auth';
 const MINIMUM_SDK_VERSION = [0, 1, 5];
 
 const USAGE = `Usage:
-  node skills/make-app-auth/scripts/audit-auth-contract.mjs <project-root> [--mode direct|service-fronted|auto] [--published]
+  node skills/make-app-auth/scripts/audit-auth-contract.mjs <project-root> [--mode direct|service-fronted|auto] [--published] [--compiler-workspace=<tooling-workspace>]
 
 Checks Make App unified-login contract drift. This is auth-scoped; it does not verify schema rendering or UI layout.`;
 
@@ -21,9 +21,15 @@ if (args.includes('--help') || args.includes('-h')) {
 let projectRoot = null;
 let mode = 'auto';
 let published = false;
+let compilerWorkspace;
 
 for (let index = 0; index < args.length; index += 1) {
   const arg = args[index];
+  if (arg.startsWith('--compiler-workspace=')) {
+    if (compilerWorkspace !== undefined || !arg.slice('--compiler-workspace='.length)) failUsage('Provide one non-empty --compiler-workspace');
+    compilerWorkspace = arg.slice('--compiler-workspace='.length);
+    continue;
+  }
   if (arg === '--published') {
     published = true;
     continue;
@@ -495,8 +501,15 @@ function findRawMakeFetches(files) {
   if (runtime.some(file => /\bfetch\s*\(/.test(fs.readFileSync(file, 'utf8')))) {
     const uiRoot = ['apps/ui', 'ui', '.'].map(dir => path.join(root, dir)).find(dir => fs.existsSync(path.join(dir, 'package.json')));
     let ts;
-    try { ts = createRequire(path.join(uiRoot ?? root, '__auth_audit__.cjs'))('typescript'); }
-    catch { return [{ file: uiRoot ?? root, url: '<unparsed>', reason: 'agent_bridge_parser_missing: install the UI TypeScript dependency before auditing raw requests' }]; }
+    try {
+      const loaded = loadTypeScriptCompiler(uiRoot ?? root, {
+        compilerWorkspace,
+        requiredFunctions: `createProgram forEachChild isAsExpression isAwaitExpression isBinaryExpression isBlock isCallExpression isDeleteExpression isElementAccessExpression isFunctionLike isIdentifier isIfStatement isImportDeclaration isJsxElement isJsxSelfClosingElement isMethodDeclaration isNamespaceImport isNewExpression isNonNullExpression isObjectLiteralExpression isParenthesizedExpression isPrefixUnaryExpression isPropertyAccessExpression isPropertyAssignment isQualifiedName isReturnStatement isShorthandPropertyAssignment isSpreadAssignment isStringLiteralLike isThrowStatement isTypeReferenceNode isVariableDeclaration`.split(/\s+/),
+        requiredEnums: `JsxEmit.Preserve NodeFlags.Const SyntaxKind.BarBarToken SyntaxKind.ExclamationEqualsEqualsToken SyntaxKind.ExclamationToken SyntaxKind.ExportKeyword SyntaxKind.FirstAssignment SyntaxKind.LastAssignment SyntaxKind.PlusToken`.split(/\s+/),
+      });
+      ts = loaded.compiler;
+      console.log(`compiler API: ${loaded.name}@${loaded.version} (API ${loaded.apiVersion})`);
+    } catch (error) { return [{ file: uiRoot ?? root, url: '<unparsed>', reason: 'agent_bridge_parser_missing: ' + error.message }]; }
     hits.push(...auditRawMakeFetches(ts, runtime));
   }
   const rawFetch = /(?:window\.)?fetch\s*\(\s*([`'"])([^`'"]*\/api\/make[^`'"]*)\1/g;

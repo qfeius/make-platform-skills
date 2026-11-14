@@ -27,7 +27,7 @@ const post = {
   '/session/request': ['GetResource'],
   '/content': ['CreateResource'],
 };
-assert.equal(ops.sourceCommit, '7ddbacac599b3fc6780fb7f01f2cf466731c2369');
+assert.equal(ops.sourceCommit, '1238c719e70ed80fd26976aedbc174bdff7998b4');
 assert.deepEqual(ops.post, post);
 assert.deepEqual(ops.get, ['/session/stream', '/content']);
 assert.equal(Object.values(ops.post).flat().length + ops.get.length, 25);

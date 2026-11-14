@@ -12,7 +12,7 @@ const hashes = {
   'openapi.json':
     'a3c77518616e6508877f06baeb815622df08f893981e261c637158aee6798303',
   'data.openapi.json':
-    '5f001799c958ef140b1f88f01594d199347ae0707ccec0633c006b87b50832a0',
+    '7372ee21a1bde993d73fa43e8374b87dd96d406847a77d0806b1ad21df8915b0',
   'events.schema.json':
     '47b44cdab77abdd1545c443edd0e0cbf116736060c8e7afce089d9bd3ee53959',
 };
@@ -29,7 +29,7 @@ try {
   const first = run();
   assert.equal(first.status, 0, first.stderr);
   const source = JSON.parse(fs.readFileSync(path.join(output, 'source.json')));
-  assert.equal(source.sourceCommit, '7ddbacac599b3fc6780fb7f01f2cf466731c2369');
+  assert.equal(source.sourceCommit, '1238c719e70ed80fd26976aedbc174bdff7998b4');
   assert.deepEqual(source.sha256, hashes);
   for (const [file, hash] of Object.entries(hashes)) {
     assert.equal(

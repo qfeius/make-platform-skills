@@ -57,9 +57,25 @@ jobs:
         run: |
           npm exec --yes --ignore-scripts --package=typescript@5.9.3 -- sh -ec '
             skill_audit_dependencies="$(dirname "$(dirname "$(command -v tsc)")")"
+            node skills/make-ai-assistant/scripts/test-load-agent-compiler.mjs "$skill_audit_dependencies"
             node skills/make-ai-assistant/scripts/test-audit-make-ai-assistant-project.mjs "$skill_audit_dependencies"
             node skills/make-app-auth/scripts/test-audit-auth-contract.mjs "$skill_audit_dependencies"
             node skills/make-app-auth/scripts/test-service-fronted-doc-examples.mjs "$skill_audit_dependencies"
+          '
+
+      - name: Check Agent tooling with native TypeScript 7
+        run: |
+          npm exec --yes --ignore-scripts --omit=optional --registry=https://registry.npmjs.org/ \
+            --package=typescript@7.0.2 --package=@typescript/typescript6@6.0.2 \
+            --package=@qfei-design/make-ai-assistant@0.4.5 \
+            --package=react@19.2.6 --package=react-dom@19.2.6 \
+            --package=@types/react@19.2.14 --package=@types/react-dom@19.2.3 -- sh -ec '
+            agent_compiler_dependencies="$(dirname "$(dirname "$(command -v tsc)")")"
+            node skills/make-ai-assistant/scripts/test-load-agent-compiler.mjs "$agent_compiler_dependencies"
+            node skills/make-ai-assistant/scripts/test-audit-make-ai-assistant-project.mjs "$agent_compiler_dependencies"
+            node skills/make-ai-assistant/scripts/verify-host-example.mjs "$agent_compiler_dependencies"
+            node skills/make-app-auth/scripts/test-audit-auth-contract.mjs "$agent_compiler_dependencies"
+            MAKE_FEEDBACK_TEST_DEPENDENCIES="$agent_compiler_dependencies" node --test skills/make-app-observability/scripts/test-audit-error-outlets.mjs
           '
 
       - name: Check error outlet audit with legacy TypeScript
@@ -72,10 +88,31 @@ jobs:
       - name: Check official Agent package and documented host example
         run: |
           npm exec --yes --ignore-scripts --registry=https://registry.npmjs.org/ \
-            --package=typescript@5.9.3 --package=@qfei-design/make-ai-assistant@0.4.2 \
+            --package=typescript@5.9.3 --package=@qfei-design/make-ai-assistant@0.4.5 \
+            --package=jsdom@29.1.1 \
             --package=react@19.2.6 --package=react-dom@19.2.6 \
             --package=@types/react@19.2.14 --package=@types/react-dom@19.2.3 -- sh -ec '
             agent_test_dependencies="$(dirname "$(dirname "$(command -v tsc)")")"
             node skills/make-ai-assistant/scripts/verify-agent-package.mjs "$agent_test_dependencies"
+            node skills/make-ai-assistant/scripts/test-verify-agent-package.mjs "$agent_test_dependencies"
             node skills/make-ai-assistant/scripts/verify-host-example.mjs "$agent_test_dependencies"
+            node skills/make-ai-assistant/scripts/verify-agent-ui.mjs "$agent_test_dependencies"
+          '
+
+      - name: Check Agent UI with minimum React peer version
+        run: |
+          npm exec --yes --ignore-scripts --registry=https://registry.npmjs.org/ \
+            --package=typescript@5.9.3 --package=@qfei-design/make-ai-assistant@0.4.5 \
+            --package=jsdom@29.1.1 --package=react@18.2.0 --package=react-dom@18.2.0 -- sh -ec '
+            agent_test_dependencies="$(dirname "$(dirname "$(command -v tsc)")")"
+            node skills/make-ai-assistant/scripts/verify-agent-ui.mjs "$agent_test_dependencies"
+          '
+
+      - name: Check official Agent terminal notice contract
+        if: ${{ !cancelled() }}
+        run: |
+          npm exec --yes --ignore-scripts --registry=https://registry.npmjs.org/ \
+            --package=typescript@5.9.3 --package=@qfei-design/make-ai-assistant@0.4.5 -- sh -ec '
+            agent_notice_dependencies="$(dirname "$(dirname "$(command -v tsc)")")"
+            node skills/make-ai-assistant/scripts/verify-agent-terminal-notice.mjs "$agent_notice_dependencies"
           '
